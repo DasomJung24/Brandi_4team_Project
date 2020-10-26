@@ -1,3 +1,5 @@
+from datetime import datetime as dt
+
 from flask        import request, jsonify, g
 from .seller_view import login_required
 
@@ -49,6 +51,8 @@ def product_endpoints(app, services):
         name           = request.args.get('name', None)
         code_number    = request.args.get('code', None)
         product_number = request.args.get('number', None)
+        create_start_date  = request.args.get('start_date', None)
+        create_end_date    = request.args.get('end_date', None)
 
         product_list = product_service.get_product_list(g.seller_id)
 
@@ -58,6 +62,10 @@ def product_endpoints(app, services):
         product_list = [product for product in product_list if product['name']==name] if name is not None else product_list
         product_list = [product for product in product_list if product['code_number']==code_number] if code_number is not None else product_list
         product_list = [product for product in product_list if product['product_number']==product_number] if product_number is not None else product_list
+        product_list = [product for product in product_list if dt.strptime(product['created_at'],'%Y-%m-%d %H:%M:%S') > dt.strptime(create_start_date,'%Y-%m-%d')] \
+                if create_start_date is not None else product_list
+        product_list = [product for product in product_list if dt.strptime(product['created_at'],'%Y-%m-%d %H:%M:%S') > dt.strptime(create_end_date,'%Y-%m-%d')] \
+                if create_end_date is not None else product_list
 
         total = len(product_list)
         offset = 0 if offset is None else offset

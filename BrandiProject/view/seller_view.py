@@ -113,7 +113,7 @@ def seller_endpoints(app, services):
             offset      = 0 if limit is None else offset
             seller_list = seller_list[offset:offset+limit] if (offset and limit) is not None else seller_list
             
-            return jsonify({'seller_list':seller_list, 'total':total, 'page':math.ceil(total/view)})
+            return jsonify({'seller_list':seller_list, 'total':total, 'page':math.ceil(total/limit)})
 
         if request.method == 'POST':
             seller_status = request.json
