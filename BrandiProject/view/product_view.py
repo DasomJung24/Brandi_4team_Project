@@ -15,23 +15,34 @@ def product_endpoints(app, services):
 
         return jsonify({'message':'SUCCESS'}), 200
     
-    @app.route("/product/update", methods=['POST'])
+    @app.route("/product/update", methods=['POST', 'GET'])
     @login_required
     def update_product():
-        product_data              = request.json
-        product_data['seller_id'] = g.seller_id
-        product                   = product_service.post_update_product(product_data)
+        if request.method == 'GET':
+            product_id = request.args.get('product_id', None)
 
-        if product == 'invalid request': return jsonify({'message':'INVALID_REQUEST'}), 400
+            if product_id is None: return jsonify({'message':'PRODUCT_NOT_EXIST'}), 400
 
-        return jsonify({'message':'SUCCESS'}), 200
+            product_data = product_service.get_product(product_id)
+            
+            if product_data is None: return jsonify({'message':'DATA_NOT_EXIST'}), 400
 
+            return jsonify(product_data)
+
+        if request.method == 'POST':
+            product_data              = request.json
+            product_data['seller_id'] = g.seller_id
+            product                   = product_service.post_update_product(product_data)
+
+            if product == 'invalid request': return jsonify({'message':'INVALID_REQUEST'}), 400
+
+            return jsonify({'message':'SUCCESS'}), 200
+        
     @app.route("/product/management", methods=['GET'])
     @login_required
     def management_product():
         limit          = request.args.get('limit', None)
         offset         = request.args.get('offset', None)
-        view           = request.args.get('view', None)
         is_sell        = request.args.get('is_sell', None)
         is_discount    = request.args.get('is_discount', None)
         is_display     = request.args.get('is_display', None)

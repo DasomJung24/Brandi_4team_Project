@@ -77,7 +77,6 @@ def seller_endpoints(app, services):
         if request.method == 'GET':        
             limit              = request.args.get('limit', None)
             offset             = request.args.get('offset', None)
-            view               = request.args.get('view', None)
             number             = request.args.get('number', None)
             account            = request.args.get('account', None)
             brand_name_korean  = request.args.get('brand_name_ko', None)

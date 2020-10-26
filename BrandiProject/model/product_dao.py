@@ -46,7 +46,6 @@ class ProductDao:
                 :origin
             )
         """), product_data).lastrowid
-
         # code_number 업데이트
         self.db.execute(text("""
             UPDATE 
@@ -98,8 +97,7 @@ class ProductDao:
                         :image,
                         :product_id
                     )
-                """), {'product_id':row, 'image':image})
-        
+                """), {'product_id':row, 'image':image})     
         # 이력관리
         self.db.execute(text("""
             INSERT INTO product_records (
@@ -128,6 +126,36 @@ class ProductDao:
 
         return row if row else None
 
+    def select_product_data(self, product_id):
+        data = self.db.execute(text("""
+            SELECT
+                *
+            FROM
+                products
+            WHERE
+                id = :id
+        """), {'id':product_id}).fetchone()
+
+        options = self.db.execute(text("""
+            SELECT
+                *
+            FROM
+                options
+            WHERE
+                product_id = :product_id
+        """), {'product_id':product_id}).fetchall()
+
+        images = self.db.execute(text("""
+            SELECT
+                *
+            FROM
+                sub_images
+            WHERE
+                product_id = :product_id
+        """), {'product_id':product_id}).fetchall()
+
+        return {'product_data':data, 'options':[dict(row) for row in options], 'images':[dict(row) for row in images]} if data is not None else None
+
     def update_product_data(self, product_data):
         row = self.db.execute(text("""
             UPDATE
@@ -154,7 +182,6 @@ class ProductDao:
             WHERE 
                 id = :product_id
             """), product_data)
-
         #이력관리
         self.db.execute(text("""
             INSERT INTO product_records (

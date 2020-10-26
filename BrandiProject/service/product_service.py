@@ -1,7 +1,6 @@
 class ProductService:
     def __init__(self, product_dao):
         self.product_dao = product_dao
-
     # 상품등록 
     def post_register_product(self, product_data):
         if product_data['sub_categories_id'] is None or product_data['name'] is None or product_data['main_image'] is None or\
@@ -17,7 +16,9 @@ class ProductService:
                 return 'invalid request'
  
         return self.product_dao.insert_product_data(product_data)
-
+    # 상품 수정 페이지 들어갔을 때 GET
+    def get_product(self, product_id):
+        return self.product_dao.select_product_data(product_id)
     # 상품수정
     def post_update_product(self, product_data):
         if product_data['sub_categories_id'] is None or product_data['name'] is None or product_data['product_id'] is None or\
@@ -33,7 +34,6 @@ class ProductService:
                 return 'invalid request'
         
         return self.product_dao.update_product_data(product_data)
-
     # 상품관리 GET
     def get_product_list(self, seller_id):
         products_data = self.product_dao.select_product_list(seller_id)
@@ -46,9 +46,9 @@ class ProductService:
             product_data['main_image']     = product['main_image']
             product_data['created_at']     = product['created_at'].strftime('%Y-%m-%d %H:%M:%S')
             product_data['code_number']    = product['code_number']
-            product_data['price']          = int(product['price'])
+            product_data['price']          = product['price']
             product_data['discount_rate']  = product['discount_rate']
-            product_data['discount_price'] = round(int(int(product['price'])*(100-product['discount_rate'])/100), -1)
+            product_data['discount_price'] = round(int(product['price']*(100-product['discount_rate'])/100), -1)
             product_data['is_sell']        = product['is_sell']
             product_data['is_display']     = product['is_display']
             product_data['is_discount']    = product['is_discount']
