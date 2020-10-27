@@ -53,7 +53,8 @@ class SellerDao:
                 id,
                 account,
                 password,
-                is_delete
+                is_delete,
+                seller_status_id
             FROM sellers
             WHERE account = :account
         """), {'account' : account}).fetchone()
@@ -63,18 +64,40 @@ class SellerDao:
     def get_seller_information(self, seller_id):
         seller = self.db.execute(text("""
             SELECT
-                a.id,
-                a.seller_status_id,
-                a.brand_name_korean,
-                a.brand_name_english,
-                a.account,
-                a.brand_crm_number,
-                b.phone_number
-            FROM sellers a
-            INNER JOIN manager_infomations b
-            ON a.id = b.seller_id
-            WHERE a.id = :id
+                id,
+                image,
+                background_image,
+                simple_introduce,
+                detail_introduce,
+                brand_crm_open,
+                brand_crm_end,
+                is_brand_crm_holiday,
+                zip_code,
+                address,
+                detail_address,
+                delivery_information,
+                refund_exchange_information,
+                seller_status_id,
+                brand_name_korean,
+                brand_name_english,
+                account,
+                brand_crm_number
+            FROM 
+                sellers
+            WHERE 
+                id = :id
         """), {'id':seller_id}).fetchone()
+
+        manager = self.db.execute(text("""
+            SELECT
+                name,
+                email,
+                phone_number
+            FROM 
+                manager_infomations
+            WHERE
+                seller_id = :seller_id
+        """), {'seller_id':seller_id}).fetchall()
         
         seller_status = self.db.execute(text("""
             SELECT
@@ -84,21 +107,68 @@ class SellerDao:
             WHERE seller_id = :id
         """), {'id':seller_id}).fetchall()
         
-        return {'seller':seller, 'seller_status':[dict(row) for row in seller_status]}    
+        return {'seller':seller, 'manager_information':[dict(row) for row in manager], 'status_histories':[dict(row) for row in seller_status]}    
     
-    # def post_seller_information(self, seller_data, seller_id):   # 셀러정보관리 페이지 update
-    #     self.db.execute(text("""
-    #         UPDATE 
-    #             manager_infomations
-    #         SET 
-    #             name = :name,
-    #             phone_number = :phone_number,
-    #             email = :email,
-    #         WHERE seller_id = :seller_id
-    #     """), {'seller_id', seller_id,
-    #             'name':seller_data})
-    #     return self.db.execute(text("""
-    #     """))
+    def update_seller_information(self, seller, manager_information):   # 셀러정보관리 페이지 update
+        row = self.db.execute(text("""
+            UPDATE
+                sellers
+            SET
+                image                       = :image,
+                background_image            = :background_image,
+                simple_introduce            = :simple_introduce,
+                detail_introduce            = :detail_introduce,
+                brand_crm_open              = :brand_crm_open,
+                brand_crm_end               = :brand_crm_end,
+                is_brand_crm_holiday        = :is_brand_crm_holiday,
+                zip_code                    = :zip_code,
+                address                     = :address,
+                detail_address              = :detail_address,
+                delivery_information        = :delivery_information,
+                refund_exchange_information = :refund_exchange_information,
+                seller_status_id            = :seller_status_id,
+                brand_name_korean           = :brand_name_korean,
+                brand_name_english          = :brand_name_english,
+                account                     = :account,
+                brand_crm_number            = :brand_crm_number
+            WHERE
+                id = :id
+        """), seller)
+        
+        if row is None:
+            return 'error'
+
+        self.db.execute(text("""
+            DELETE FROM
+                manager_infomations
+            WHERE
+                seller_id = :id
+        """), seller)
+
+        for manager in manager_information:
+            manager = self.db.execute(text("""
+                INSERT INTO manager_infomations(
+                    name,
+                    phone_number,
+                    email,
+                    seller_id
+                ) VALUES (
+                    :name,
+                    :phone_number,
+                    :email,
+                    :seller_id
+                )
+            """), {
+                    'name'         : manager['name'],
+                    'phone_number' : manager['phone_number'],
+                    'email'        : manager['email'], 
+                    'seller_id'    : seller['id']})
+
+            if manager is None:
+                return 'error'
+
+        return row
+            
     def is_master(self, seller_id):
         return self.db.execute(text("""
             SELECT

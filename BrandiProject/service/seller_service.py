@@ -44,6 +44,9 @@ class SellerService:
             if seller_data is None:
                 return 'not exist'
 
+            if seller_data['seller_status_id'] == 1:
+                return 'not authorized'
+
             if not bcrypt.checkpw(seller['password'].encode('utf-8'), seller_data['password'].encode('utf-8')):
                 return 'wrong password'
 
@@ -58,16 +61,31 @@ class SellerService:
         return access_token.decode('utf-8')
 
     def get_my_page(self, seller_id):   # 셀러정보관리(셀러)
-        return self.seller_dao.get_seller_information(seller_id)
+        seller = self.seller_dao.get_seller_information(seller_id)
+        for history in seller['status_histories']:
+            history['update_time'] = history['update_time'].strftime(('%Y-%m-%d %H:%M:%S'))
+
+        return seller
     
     def post_my_page(self, seller_data, seller_id):  # 아직 미완성
-        if seller_data['image'] is None or seller_data['simple_introduce'] is None or seller_data['manager_name'] is None or \
-            seller_data['manager_phone_number'] is None or seller_data['manager_email'] is None or seller_data['brand_crm_number'] is None or \
-            seller_data['zip_code'] is None or seller_data['address'] is None or seller_data['detail_address'] is None or seller_data['brand_crm_open'] is None or \
-            seller_data['brand_crm_end'] is None or seller_data['delivery_information'] is None or seller_data['refund_exchange_information'] is None:
-                return None
+        seller = seller_data['seller']
 
-        return self.seller_dao.post_seller_information(seller_data, seller_id)
+        if seller['image'] is None or seller['simple_introduce'] is None or seller['brand_crm_number'] is None or \
+            seller['zip_code'] is None or seller['address'] is None or seller['detail_address'] is None or seller['brand_crm_open'] is None or \
+            seller['brand_crm_end'] is None or seller['delivery_information'] is None or seller['refund_exchange_information'] is None:
+            return None
+        
+        if seller_data['manager_information'] is None:
+            return None
+
+        for manager in seller_data['manager_information']:
+            if manager['name'] is None or manager['phone_number'] is None or manager['email'] is None: 
+                return None
+        
+        seller['id'] = seller_id
+        manager_information = seller_data['manager_information']
+
+        return self.seller_dao.update_seller_information(seller, manager_information)
 
     def get_seller_list(self, seller_id):   # 마스터 셀러 계정 관리 GET
         is_master = self.seller_dao.is_master(seller_id)

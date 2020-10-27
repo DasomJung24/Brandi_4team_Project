@@ -47,7 +47,7 @@ class ProductDao:
             )
         """), product_data).lastrowid
         # code_number 업데이트
-        self.db.execute(text("""
+        code = self.db.execute(text("""
             UPDATE 
                 products
             SET
@@ -55,6 +55,8 @@ class ProductDao:
             WHERE 
                 id = :product_id
         """), {'code_number':int(row)*100, 'product_id':row})
+
+        if code is None: return 'error'
        
         for option in product_data['options']:
             option_id = self.db.execute(text("""
@@ -78,7 +80,7 @@ class ProductDao:
                     'is_inventory_manage' : option['is_inventory_manage'],
                     'count'               : option['count']}).lastrowid
 
-            self.db.execute(text("""
+            op = self.db.execute(text("""
                 UPDATE
                     options
                 SET
@@ -86,6 +88,8 @@ class ProductDao:
                 WHERE
                     id = :id
             """), {'id':option_id, 'product_number':int(option_id)*50})
+
+            if op is None: return 'error'
         
         if product_data['image_list'] is not None:
             for image in product_data['image_list']:
@@ -99,7 +103,7 @@ class ProductDao:
                     )
                 """), {'product_id':row, 'image':image})     
         # 이력관리
-        self.db.execute(text("""
+        record = self.db.execute(text("""
             INSERT INTO product_records (
                 seller_id,
                 product_id,
@@ -123,6 +127,8 @@ class ProductDao:
                 'price'         : product_data['price'],
                 'discount_rate' : product_data['discount_rate'],
                 'main_image'    : product_data['main_image']})
+        
+        if record is None: return 'error'
 
         return row if row else None
 

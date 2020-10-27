@@ -51,6 +51,7 @@ def seller_endpoints(app, services):
         if token == 'wrong password':  return jsonify({'message':'WRONG_PASSWORD'}), 400
         if token == 'deleted account': return jsonify({'message':'INVALID_ACCOUNT'}), 400
         if token == 'key error':       return jsonify({'message':'KEY_ERROR'}), 400
+        if token == 'not authorized':  return jsonify({'message':'NOT_AUTHORIZED'}), 400
         
         return jsonify({'access_token':token})
 
@@ -66,8 +67,8 @@ def seller_endpoints(app, services):
             seller_data = request.json
             seller_data = seller_service.post_my_page(seller_data, g.seller_id)
             
-            if seller_data is None:
-                return jsonify({'message':'INVALID REQUEST'}), 400
+            if seller_data is None:    return jsonify({'message':'INVALID REQUEST'}), 400
+            if seller_data == 'error': return jsonify({'message':'UPDATE_FAILED'}), 400
             
             return jsonify({'message':'SUCCESS'}), 200
 
@@ -117,11 +118,12 @@ def seller_endpoints(app, services):
 
         if request.method == 'POST':
             seller_status = request.json
-            seller_id     = seller_status['id']
-            button        = seller_status['button']
+            seller_id     = seller_status['seller_id']
+            button        = seller_status['button']  # int type으로 받으면 실행 안됨
             status        = seller_service.post_seller_status(seller_id, button)
 
             if status == 'invalid request': return jsonify({'message' : 'INVALID_REQUEST'}), 400
             if status == 'message fail':    return jsonify({'message' : 'MESSAGE_FAILED'}), 400
+            if status == 'not authorizated': return jsonify({'message':'NOT_AUTHORIZATED'}), 400
             
             return jsonify({'message':'SUCCESS'}), 200

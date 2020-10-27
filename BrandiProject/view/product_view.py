@@ -14,6 +14,7 @@ def product_endpoints(app, services):
         product                   = product_service.post_register_product(product_data)
 
         if product == 'invalid request': return jsonify({'message':'INVALID_REQUEST'}), 400
+        if product == 'error': return jsonify({'message':'DATA_FAILED'}), 400
 
         return jsonify({'message':'SUCCESS'}), 200
     # 상품상세페이지(수정) POST
@@ -42,14 +43,14 @@ def product_endpoints(app, services):
     @app.route("/product/management", methods=['GET'])
     @login_required
     def management_product():
-        limit          = request.args.get('limit', None)
-        offset         = request.args.get('offset', None)
-        is_sell        = request.args.get('is_sell', None)
-        is_discount    = request.args.get('is_discount', None)
-        is_display     = request.args.get('is_display', None)
-        name           = request.args.get('name', None)
-        code_number    = request.args.get('code', None)
-        product_number = request.args.get('number', None)
+        limit              = request.args.get('limit', None)
+        offset             = request.args.get('offset', None)
+        is_sell            = request.args.get('is_sell', None)
+        is_discount        = request.args.get('is_discount', None)
+        is_display         = request.args.get('is_display', None)
+        name               = request.args.get('name', None)
+        code_number        = request.args.get('code', None)
+        product_number     = request.args.get('number', None)
         create_start_date  = request.args.get('start_date', None)
         create_end_date    = request.args.get('end_date', None)
 
