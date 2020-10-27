@@ -16,22 +16,10 @@ def product_endpoints(app, services):
         if product == 'invalid request': return jsonify({'message':'INVALID_REQUEST'}), 400
 
         return jsonify({'message':'SUCCESS'}), 200
-    
-    @app.route("/product/update", methods=['POST', 'GET'])
+    # 상품상세페이지(수정) POST
+    @app.route("/product/update", methods=['POST'])
     @login_required
     def update_product():
-        if request.method == 'GET':
-            product_id = request.args.get('product_id', None)
-
-            if product_id is None: return jsonify({'message':'PRODUCT_NOT_EXIST'}), 400
-
-            product_data = product_service.get_product(product_id)
-            
-            if product_data is None: return jsonify({'message':'DATA_NOT_EXIST'}), 400
-
-            return jsonify(product_data)
-
-        if request.method == 'POST':
             product_data              = request.json
             product_data['seller_id'] = g.seller_id
             product                   = product_service.post_update_product(product_data)
@@ -39,7 +27,18 @@ def product_endpoints(app, services):
             if product == 'invalid request': return jsonify({'message':'INVALID_REQUEST'}), 400
 
             return jsonify({'message':'SUCCESS'}), 200
+    # 상품상세페이지(수정) GET
+    @app.route("/product/update/<int:product_id>", methods=['GET'])
+    @login_required
+    def get_update_product(product_id):
+        if product_id is None: return jsonify({'message':'PRODUCT_NOT_EXIST'}), 400
+
+        product_data = product_service.get_product(product_id)
         
+        if product_data is None: return jsonify({'message':'DATA_NOT_EXIST'}), 400
+
+        return jsonify(product_data)
+
     @app.route("/product/management", methods=['GET'])
     @login_required
     def management_product():
