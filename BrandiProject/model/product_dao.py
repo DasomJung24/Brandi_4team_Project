@@ -1,11 +1,12 @@
 from sqlalchemy import text
+from exceptions import NoAffectedRowException, NoDataException
+
 
 class ProductDao:
-    def __init__(self, database):
-        self.db = database
 
-    def insert_product_data(self, product_data):
-        row = self.db.execute(text("""
+    def insert_product_data(self, product_data, session):
+        # 상품 등록하기
+        product_id = session.execute(text("""
             INSERT INTO products (
                 name,
                 seller_id,
@@ -46,124 +47,139 @@ class ProductDao:
                 :origin
             )
         """), product_data).lastrowid
-        # code_number 업데이트
-        code = self.db.execute(text("""
+
+        if product_id is None:
+            raise NoAffectedRowException(500, 'insert_product_data insert error')
+
+        # 등록한 상품 Id 를 받아서 그 상품의 code_number 등록하기
+        code = session.execute(text("""
             UPDATE 
                 products
             SET
                 code_number = :code_number
             WHERE 
                 id = :product_id
-        """), {'code_number':int(row)*100, 'product_id':row})
+        """), {'code_number': int(product_id)*100, 'product_id': product_id}).rowcount
 
-        if code is None: return 'error'
-       
-        for option in product_data['options']:
-            option_id = self.db.execute(text("""
-                INSERT INTO options (
-                    product_id,
-                    color_id,
-                    size_id,
-                    is_inventory_manage,
-                    count
-                ) VALUES (
-                    :product_id,
-                    :color_id,
-                    :size_id,
-                    :is_inventory_manage,
-                    :count
-                )
-            """), {
-                    'product_id'          : row,
-                    'color_id'            : option['color_id'],
-                    'size_id'             : option['size_id'],
-                    'is_inventory_manage' : option['is_inventory_manage'],
-                    'count'               : option['count']}).lastrowid
+        if code == 0:
+            raise NoAffectedRowException(500, 'insert_product_data code number update error')
 
-            op = self.db.execute(text("""
-                UPDATE
-                    options
-                SET
-                    product_number = :product_number
-                WHERE
-                    id = :id
-            """), {'id':option_id, 'product_number':int(option_id)*50})
+        # 상품 등록 이력관리
+        record = session.execute(text("""
+               INSERT INTO product_records (
+                   seller_id,
+                   product_id,
+                   product_name,
+                   price,
+                   discount_rate,
+                   start_time,
+                   close_time,
+                   main_image
+               ) VALUES (
+                   :seller_id,
+                   :product_id,
+                   :name,
+                   :price,
+                   :discount_rate,
+                   now(),
+                   :close_time,
+                   :main_image
+               )
+           """), {'seller_id': product_data['seller_id'], 'product_id': product_id, 'name': product_data['name'],
+                  'price': product_data['price'], 'discount_rate': product_data['discount_rate'],
+                  'main_image': product_data['main_image'], 'close_time': product_data['close_time']}).rowcount
 
-            if op is None: return 'error'
-        
-        if product_data['image_list'] is not None:
-            for image in product_data['image_list']:
-                self.db.execute(text("""
-                    INSERT INTO sub_images (
-                        image,
-                        product_id
-                    ) VALUES (
-                        :image,
-                        :product_id
-                    )
-                """), {'product_id':row, 'image':image})     
-        # 이력관리
-        record = self.db.execute(text("""
-            INSERT INTO product_records (
-                seller_id,
+        if record == 0:
+            raise NoAffectedRowException(500, 'insert_product_data record insert error')
+
+        return product_id
+
+    # 옵션 데이터 등록하기
+    def insert_data_option(self, option, session):
+        option = session.execute(text("""
+            INSERT INTO options (
                 product_id,
-                product_name,
-                price,
-                discount_rate,
-                start_time,
-                main_image
+                color_id,
+                size_id,
+                is_inventory_manage,
+                count,
+                ordering
             ) VALUES (
-                :seller_id,
                 :product_id,
-                :name,
-                :price,
-                :discount_rate,
-                now(),
-                :main_image
+                :color_id,
+                :size_id,
+                :is_inventory_manage,
+                :count,
+                :ordering
             )
-        """), {'seller_id'      : product_data['seller_id'],
-                'product_id'    : row,
-                'name'          : product_data['name'],
-                'price'         : product_data['price'],
-                'discount_rate' : product_data['discount_rate'],
-                'main_image'    : product_data['main_image']})
-        
-        if record is None: return 'error'
+        """), option).rowcount
 
-        return row if row else None
+        if option == 0:
+            raise NoAffectedRowException(500, 'insert_data_option insert error')
 
-    def select_product_data(self, product_id):
-        data = self.db.execute(text("""
+    # 서브 이미지 등록하기
+    def insert_data_sub_image(self, image, session):
+        image = session.execute(text("""
+            INSERT INTO sub_images (
+                image,
+                product_id
+            ) VALUES (
+                :image,
+                :product_id
+            )
+        """), image).rowcount
+
+        if image == 0:
+            raise NoAffectedRowException(500, 'insert_data_sub_image insert error')
+
+    # 상품 데이터 가져오기
+    def select_product_data(self, product_id, session):
+        product_data = session.execute(text("""
             SELECT
                 *
             FROM
                 products
             WHERE
                 id = :id
-        """), {'id':product_id}).fetchone()
+        """), {'id': product_id}).fetchone()
 
-        options = self.db.execute(text("""
+        if product_data is None:
+            raise NoDataException(500, 'select_product_data select error')
+
+        return product_data
+
+    def select_product_options(self, product_id, session):
+        options = session.execute(text("""
             SELECT
                 *
             FROM
                 options
             WHERE
                 product_id = :product_id
-        """), {'product_id':product_id}).fetchall()
+        """), {'product_id': product_id}).fetchall()
 
-        images = self.db.execute(text("""
+        if options is None:
+            raise NoDataException(500, 'select_product_options select error')
+
+        return options
+        # return {'options': [dict(row) for row in options]}
+
+    def select_product_images(self, product_id, session):
+        images = session.execute(text("""
             SELECT
                 *
             FROM
                 sub_images
             WHERE
                 product_id = :product_id
-        """), {'product_id':product_id}).fetchall()
+        """), {'product_id': product_id}).fetchall()
 
-        return {'product_data':data, 'options':[dict(row) for row in options], 'images':[dict(row) for row in images]} if data is not None else None
+        return images
+        # return {'images': [dict(row) for row in images]}
 
-    def update_product_data(self, product_data):
-        row = self.db.execute(text("""
+    # 상품데이터 업데이트하기
+    def update_product_data(self, product_data, session):
+        product = session.execute(text("""
             UPDATE
                 products
             SET
@@ -187,9 +203,13 @@ class ProductDao:
                 origin              = :origin
             WHERE 
                 id = :product_id
-            """), product_data)
-        #이력관리
-        self.db.execute(text("""
+            """), product_data).rowcount
+
+        if product == 0:
+            raise NoAffectedRowException(500, 'update_product_data update error')
+
+        # 상품 이력관리
+        product_record = session.execute(text("""
             INSERT INTO product_records (
                 seller_id,
                 product_id,
@@ -197,6 +217,7 @@ class ProductDao:
                 price,
                 discount_rate,
                 start_time,
+                close_time,
                 main_image
             ) VALUES (
                 :seller_id,
@@ -205,96 +226,160 @@ class ProductDao:
                 :price,
                 :discount_rate,
                 now(),
+                :close_time,
                 :main_image
             )
-        """), product_data)
+        """), product_data).rowcount
 
-        records = self.db.execute(text("""
-            SELECT
-                id
-            FROM 
-                product_records
-            WHERE
-                product_id = :product_id
-        """), product_data).fetchall()
+        if product_record == 0:
+            raise NoAffectedRowException(500, 'update_product_data record insert error')
 
-        self.db.execute(text("""
-            UPDATE 
+        # 바로 전 이력 close_time 현재 시간으로 수정하기
+        update_prerecord = session.execute(text("""
+            UPDATE
                 product_records
-            SET
+            SET 
                 close_time = now()
             WHERE
-                id = :id
-        """), {'id':records[-2]['id']})
+                product_id = :product_id
+            AND
+                close_time = :close_time
+        """), product_data).rowcount
 
-        self.db.execute(text("""
+        if update_prerecord == 0:
+            raise NoAffectedRowException(500, 'update_product_data pre-record update error')
+
+    def update_option(self, options, session):
+        delete_option = session.execute(text("""
             DELETE FROM 
                 options
             WHERE
                 product_id = :product_id
-        """), product_data)
+        """), {'product_id': options[0]['product_id']}).rowcount
 
-        for option in product_data['options']:
-            self.db.execute(text("""
+        if delete_option == 0:
+            raise NoAffectedRowException(500, 'update_option delete error')
+
+        for idx, option in enumerate(options):
+            insert_option = session.execute(text("""
                 INSERT INTO options (
                     product_id,
                     color_id,
                     size_id,
                     is_inventory_manage,
-                    count
+                    count,
+                    ordering
                 ) VALUES (
                     :product_id,
                     :color_id,
                     :size_id,
                     :is_inventory_manage,
-                    :count
+                    :count,
+                    :ordering
                 )
-            """), {
-                    'product_id'          : product_data['product_id'],
-                    'color_id'            : option['color_id'],
-                    'size_id'             : option['size_id'],
-                    'is_inventory_manage' : option['is_inventory_manage'],
-                    'count'               : option['count']})
-        
-        self.db.execute(text("""
-            DELETE FROM 
-                sub_images
-            WHERE
-                product_id = :product_id
-        """), product_data)
+            """), {'product_id': option['product_id'], 'color_id': option['color_id'],
+                   'size_id': option['size_id'], 'is_inventory_manage': option['is_inventory_manage'],
+                   'count': option['count'], 'ordering': idx+1}).rowcount
 
-        if product_data['image_list'] is not None:
-            for image in product_data['image_list']:
-                self.db.execute(text("""
-                    INSERT INTO sub_images (
-                        image,
-                        product_id
-                    ) VALUES (
-                        :image,
-                        :product_id
-                    )
-                """), {'product_id':product_data['product_id'], 'image':image})
+            if insert_option == 0:
+                raise NoAffectedRowException(500, 'update_option insert error')
 
-        return row if row else None
-
-    def select_product_list(self, seller_id):
-        return self.db.execute(text("""
+    def update_sub_image(self, image_list, session):
+        image_data = session.execute(text("""
             SELECT 
                 *
             FROM
-                products a
-            JOIN
-                (
-                    SELECT 
-                        product_id, 
-                        max(product_number) 
-                    FROM 
-                        options 
-                    GROUP BY 
-                        product_id
-                )b
-            ON 
-                a.id = b.product_id
+                sub_images
             WHERE
-                a.seller_id = :seller_id 
-        """), {'seller_id':seller_id}).fetchall()
+                product_id = :product_id
+        """), {'product_id': image_list[0]['product_id']}).fetchall()
+
+        if image_data is not None:
+            delete_row = session.execute(text("""
+                DELETE FROM 
+                    sub_images
+                WHERE
+                    product_id = :product_id
+            """), {'product_id': image_list[0]['product_id']}).rowcount
+
+            if delete_row == 0:
+                raise NoAffectedRowException(500, 'update_sub_image delete error')
+
+        for image in image_list:
+            insert_image = session.execute(text("""
+                INSERT INTO sub_images (
+                    image,
+                    product_id
+                ) VALUES (
+                    :image,
+                    :product_id
+                )
+            """), image).rowcount
+
+            if insert_image == 0:
+                raise NoAffectedRowException(500, 'update_sub_image insert error')
+
+    # 셀러가 자신의 등록 상품들을 가져오기
+    def select_product_list(self, query_string_list, session):
+        sql = """
+            SELECT
+                id,
+                created_at,
+                main_image,
+                name,
+                code_number,
+                price,
+                discount_rate,
+                is_sell,
+                is_display,
+                is_discount
+            FROM
+                products
+            WHERE
+                seller_id = :seller_id """
+
+        if query_string_list['is_sell']:
+            sql += """
+            AND
+                is_sell = :is_sell """
+
+        if query_string_list['is_discount']:
+            sql += """
+            AND
+                is_discount = :is_discount """
+
+        if query_string_list['is_display']:
+            sql += """
+            AND
+                is_display = :is_display """
+
+        if query_string_list['name']:
+            sql += """
+            AND
+                name = :name """
+
+        if query_string_list['code_number']:
+            sql += """
+            AND 
+                code_number = :code_number """
+
+        if query_string_list['start_date']:
+            sql += """
+            AND
+                created_at > :start_date """
+
+        if query_string_list['end_date']:
+            sql += """
+            AND
+                created_at < :end_date """
+
+        total_count = len(session.execute(text(sql), query_string_list).fetchall())
+
+        sql += """
+            LIMIT :limit
+            OFFSET :offset
+        """
+
+        product_list = session.execute(text(sql), query_string_list).fetchall()
+
+        return {'product_list': [dict(row) for row in product_list], 'total_count': total_count}

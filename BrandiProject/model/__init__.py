@@ -1,4 +1,4 @@
-from .seller_dao  import SellerDao
+from .seller_dao import SellerDao
 from .product_dao import ProductDao
 
 __all__ = [

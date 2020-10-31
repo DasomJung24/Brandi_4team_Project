@@ -1,11 +1,11 @@
 from sqlalchemy import text
+from exceptions import NoAffectedRowException, NoDataException
+
 
 class SellerDao:
-    def __init__(self, database):
-        self.db = database
 
-    def insert_seller(self, seller):
-        row_id = self.db.execute(text("""
+    def insert_seller(self, seller, session):
+        seller_id = session.execute(text("""
             INSERT INTO sellers (
                 account,
                 password,
@@ -22,18 +22,28 @@ class SellerDao:
                 :seller_property_id
             )
         """), seller).lastrowid
-        
-        self.db.execute(text("""
-            INSERT INTO manager_infomations (
+
+        if seller_id is None:
+            raise NoAffectedRowException(500, 'insert_seller insert error')
+
+        # 담당자 정보 입력하기
+        manager_row = session.execute(text("""
+            INSERT INTO manager_informations (
                 phone_number,
-                seller_id
+                seller_id,
+                ordering
             ) VALUES (
                 :phone_number,
-                :seller_id
+                :seller_id,
+                1
             )
-        """), {'seller_id':row_id, 'phone_number':seller['phone_number']})
-        
-        self.db.execute(text("""
+        """), {'seller_id': seller_id, 'phone_number': seller['phone_number']}).rowcount
+
+        if manager_row == 0:
+            raise NoAffectedRowException(500, 'insert_seller manager information insert error')
+
+        # 계정 이력 관리
+        history_row = session.execute(text("""
             INSERT INTO seller_status_histories (
                 update_time,
                 seller_status_id,
@@ -43,12 +53,15 @@ class SellerDao:
                 1,
                 :seller_id
             )
-        """), {'seller_id':row_id})
-        
-        return row_id if row_id else None
+        """), {'seller_id': seller_id}).rowcount
 
-    def get_seller_data(self, account):
-        row = self.db.execute(text("""
+        if history_row == 0:
+            raise NoAffectedRowException(500, 'insert_seller status history insert error')
+
+        return seller_id
+
+    def get_seller_data(self, account, session):
+        seller = session.execute(text("""
             SELECT
                 id,
                 account,
@@ -57,12 +70,13 @@ class SellerDao:
                 seller_status_id
             FROM sellers
             WHERE account = :account
-        """), {'account' : account}).fetchone()
+        """), {'account': account}).fetchone()
 
-        return row if row else None
+        return seller if seller else None
 
-    def get_seller_information(self, seller_id):
-        seller = self.db.execute(text("""
+    # 셀러 정보 관리 - 셀러 정보 가져오기
+    def get_seller_information(self, seller_id, session):
+        seller = session.execute(text("""
             SELECT
                 id,
                 image,
@@ -86,31 +100,45 @@ class SellerDao:
                 sellers
             WHERE 
                 id = :id
-        """), {'id':seller_id}).fetchone()
+        """), {'id': seller_id}).fetchone()
 
-        manager = self.db.execute(text("""
+        if seller is None:
+            raise NoDataException(500, 'get_seller_information select error')
+
+        # 담당자 정보는 1개 이상이라 모두 가져와서 배열로 보내기
+        managers = session.execute(text("""
             SELECT
                 name,
                 email,
                 phone_number
             FROM 
-                manager_infomations
+                manager_informations
             WHERE
                 seller_id = :seller_id
-        """), {'seller_id':seller_id}).fetchall()
+        """), {'seller_id': seller_id}).fetchall()
+
+        if managers is None:
+            raise NoDataException(500, 'get_seller_information manager information select error')
         
-        seller_status = self.db.execute(text("""
+        # 셀러 상태 변경 히스토리 가져오기
+        seller_status = session.execute(text("""
             SELECT
                 seller_status_id,
                 update_time
             FROM seller_status_histories
             WHERE seller_id = :id
-        """), {'id':seller_id}).fetchall()
+        """), {'id': seller_id}).fetchall()
+
+        if seller_status is None:
+            raise NoDataException(500, 'get_seller_information seller status select error')
         
-        return {'seller':seller, 'manager_information':[dict(row) for row in manager], 'status_histories':[dict(row) for row in seller_status]}    
-    
-    def update_seller_information(self, seller, manager_information):   # 셀러정보관리 페이지 update
-        row = self.db.execute(text("""
+        return {'seller': seller,
+                'manager_information': [dict(row) for row in managers],
+                'status_histories': [dict(row) for row in seller_status]}
+
+    # 셀러정보관리 페이지 업데이트
+    def update_seller_information(self, seller, session):   # 셀러정보관리 페이지 update
+        update_row = session.execute(text("""
             UPDATE
                 sellers
             SET
@@ -133,52 +161,60 @@ class SellerDao:
                 brand_crm_number            = :brand_crm_number
             WHERE
                 id = :id
-        """), seller)
-        
-        if row is None:
-            return 'error'
+        """), seller).rowcount
 
-        self.db.execute(text("""
+        # update 성공하면 해당하는 row 의 수 반환 실패하면 0 반환
+        if update_row == 0:
+            raise NoAffectedRowException(500, 'update_seller_information seller update error')
+
+    def update_manager_information(self, manager, session):
+        delete_row = session.execute(text("""
             DELETE FROM
-                manager_infomations
+                manager_informations
             WHERE
-                seller_id = :id
-        """), seller)
+                seller_id = :seller_id
+        """), {'seller_id': manager['seller_id']}).rowcount
 
-        for manager in manager_information:
-            manager = self.db.execute(text("""
-                INSERT INTO manager_infomations(
-                    name,
-                    phone_number,
-                    email,
-                    seller_id
-                ) VALUES (
-                    :name,
-                    :phone_number,
-                    :email,
-                    :seller_id
-                )
-            """), {
-                    'name'         : manager['name'],
-                    'phone_number' : manager['phone_number'],
-                    'email'        : manager['email'], 
-                    'seller_id'    : seller['id']})
+        # delete 성공하면 해당하는 row 의 수 반환 실패하면 0 반환
+        if delete_row == 0:
+            raise NoAffectedRowException(500, 'update_seller_information manager information delete error')
 
-            if manager is None:
-                return 'error'
+        manager_row = session.execute(text("""
+            INSERT INTO manager_informations(
+                name,
+                phone_number,
+                email,
+                seller_id,
+                ordering
+            ) VALUES (
+                :name,
+                :phone_number,
+                :email,
+                :seller_id,
+                :ordering
+            )
+        """), manager).rowcount
 
-        return row
-            
-    def is_master(self, seller_id):
-        return self.db.execute(text("""
+        if manager_row == 0:
+            raise NoAffectedRowException(500, 'update_seller_information manager information insert error')
+
+    # 마스터인지 아닌지 확인하는 함수
+    def is_master(self, seller_id, session):
+        is_master = session.execute(text("""
             SELECT
                 is_master
             FROM sellers
             WHERE id = :id
-        """), {'id':seller_id}).fetchone()
+        """), {'id': seller_id}).fetchone()
 
-    def get_seller_list(self):
-        return self.db.execute(text("""
+        if is_master is None:
+            raise NoDataException(500, 'is_master select error')
+
+        return is_master
+
+    # 마스터 셀러계정관리에서 셀러 계정 가져오기
+    def select_seller_list(self, query_string_list, session):
+        sql = """
             SELECT
                 a.id, 
                 a.account, 
@@ -189,23 +225,91 @@ class SellerDao:
                 a.created_at, 
                 b.name, 
                 b.phone_number, 
-                b.email                
+                b.email              
             FROM sellers a 
-            LEFT JOIN manager_infomations b 
+            INNER JOIN manager_informations b 
             ON a.id = b.seller_id
-        """)).fetchall()
+            WHERE 
+             b.ordering = 1
+            AND
+             a.is_master = 0
+            """
 
-    def status_change_two(self, seller_id):
-        row = self.db.execute(text("""
+        if query_string_list['brand_name_korean']:
+            sql += """
+            AND
+                a.brand_name_korean = :brand_name_korean """
+
+        if query_string_list['account']:
+            sql += """
+            AND
+                a.account = :account """
+
+        if query_string_list['brand_name_english']:
+            sql += """
+            AND
+                a.brand_name_english = :brand_name_english """
+
+        if query_string_list['manager_name']:
+            sql += """
+            AND
+                b.name = :manager_name """
+
+        if query_string_list['manager_number']:
+            sql += """
+            AND
+                b.phone_number = :manager_number """
+
+        if query_string_list['email']:
+            sql += """
+            AND
+                b.email = :email """
+
+        if query_string_list['seller_status_id']:
+            sql += """
+            AND
+                a.seller_status_id = :seller_status_id """
+
+        if query_string_list['seller_property_id']:
+            sql += """
+            AND
+                a.seller_property_id = :seller_property_id """
+
+        if query_string_list['start_date']:
+            sql += """
+            AND
+                a.created_at > :start_date """
+
+        if query_string_list['end_date']:
+            sql += """
+            AND
+                a.created_at < :end_date """
+
+        total_count = len(session.execute(text(sql), query_string_list).fetchall())
+
+        sql += """
+            LIMIT :limit
+            OFFSET :offset """
+
+        seller_list = session.execute(text(sql), query_string_list).fetchall()
+
+        return {'seller_list': [dict(row) for row in seller_list], 'total_count': total_count}
+
+    # 셀러 상태 입점으로 변경
+    def status_change_store(self, seller_id, session):
+        update_row = session.execute(text("""
             UPDATE
                 sellers
             SET 
                 seller_status_id = 2
             WHERE
                 id = :id
-            """), {'id':seller_id})
-        
-        self.db.execute(text("""
+            """), {'id': seller_id}).rowcount
+
+        if update_row == 0:
+            raise NoAffectedRowException(500, 'status_change_store update error')
+
+        history_row = session.execute(text("""
             INSERT INTO seller_status_histories (
                 update_time,
                 seller_status_id,
@@ -215,22 +319,26 @@ class SellerDao:
                 2,
                 :seller_id
             )
-        """), {'seller_id':seller_id})
+        """), {'seller_id': seller_id}).rowcount
 
-        return row if row else None
-        
+        if history_row == 0:
+            raise NoAffectedRowException(500, 'status_change_store insert error')
 
-    def status_change_four(self, seller_id):
-        row = self.db.execute(text("""
+    # 셀러 상태 퇴점 대기 상태로 변경
+    def status_change_closed_wait(self, seller_id, session):
+        update_row = session.execute(text("""
             UPDATE
                 sellers
             SET 
                 seller_status_id = 4
             WHERE
                 id = :id
-            """), {'id':seller_id})
+            """), {'id': seller_id}).rowcount
 
-        self.db.execute(text("""
+        if update_row == 0:
+            raise NoAffectedRowException(500, 'status_change_closed_wait update error')
+
+        history_row = session.execute(text("""
             INSERT INTO seller_status_histories (
                 update_time,
                 seller_status_id,
@@ -240,21 +348,26 @@ class SellerDao:
                 4,
                 :seller_id
             )
-        """), {'seller_id':seller_id})
+        """), {'seller_id': seller_id}).rowcount
 
-        return row if row else None
-        
-    def status_change_three(self, seller_id):
-        row = self.db.execute(text("""
+        if history_row == 0:
+            raise NoAffectedRowException(500, 'status_change_closed_wait insert error')
+
+    # 셀러상태 휴점 상태로 변경
+    def status_change_temporarily_closed(self, seller_id, session):
+        update_row = session.execute(text("""
             UPDATE
                 sellers
             SET 
                 seller_status_id = 3
             WHERE
                 id = :id
-            """), {'id':seller_id})
+            """), {'id': seller_id}).rowcount
+
+        if update_row == 0:
+            raise NoAffectedRowException(500, 'status_change_temporarily_closed update error')
             
-        self.db.execute(text("""
+        history_row = session.execute(text("""
             INSERT INTO seller_status_histories (
                 update_time,
                 seller_status_id,
@@ -264,12 +377,14 @@ class SellerDao:
                 3,
                 :seller_id
             )
-        """), {'seller_id':seller_id})
+        """), {'seller_id': seller_id}).rowcount
 
-        return row if row else None
-        
-    def status_change_six(self, seller_id):
-        row = self.db.execute(text("""
+        if history_row == 0:
+            raise NoAffectedRowException(500, 'status_change_temporarily_closed insert error')
+
+    # 셀러상태 입점 거절로 변경
+    def status_change_refused_store(self, seller_id, session):
+        update_row = session.execute(text("""
             UPDATE
                 sellers
             SET 
@@ -277,9 +392,12 @@ class SellerDao:
                 is_delete = True
             WHERE
                 id = :id
-            """), {'id':seller_id})
+            """), {'id': seller_id}).rowcount
 
-        self.db.execute(text("""
+        if update_row == 0:
+            raise NoAffectedRowException(500, 'status_change_refused_store update error')
+
+        history_row = session.execute(text("""
             INSERT INTO seller_status_histories (
                 update_time,
                 seller_status_id,
@@ -289,12 +407,14 @@ class SellerDao:
                 6,
                 :seller_id
             )
-        """), {'seller_id':seller_id})
+        """), {'seller_id': seller_id}).rowcount
 
-        return row if row else None
-        
-    def status_change_five(self, seller_id):
-        row = self.db.execute(text("""
+        if history_row == 0:
+            raise NoAffectedRowException(500, 'status_change_refused_store insert error')
+
+    # 셀러상태 퇴점으로 변경
+    def status_change_closed_store(self, seller_id, session):
+        update_row = session.execute(text("""
             UPDATE
                 sellers
             SET 
@@ -302,9 +422,12 @@ class SellerDao:
                 is_delete = True
             WHERE
                 id = :id
-            """), {'id':seller_id})
+            """), {'id': seller_id}).rowcount
 
-        self.db.execute(text("""
+        if update_row == 0:
+            raise NoAffectedRowException(500, 'status_change_closed_store update error')
+
+        history_row = session.execute(text("""
             INSERT INTO seller_status_histories (
                 update_time,
                 seller_status_id,
@@ -314,15 +437,20 @@ class SellerDao:
                 5,
                 :seller_id
             )
-        """), {'seller_id':seller_id})
+        """), {'seller_id': seller_id}).rowcount
 
-        return row if row else None  
+        if history_row == 0:
+            raise NoAffectedRowException(500, 'status_change_closed_store insert error')
 
-    def get_status_id(self, seller_id):
-        return self.db.execute(text("""
+    # 셀러 입점상태 가져오기
+    def get_status_id(self, seller_id, session):
+        seller_status_id = session.execute(text("""
             SELECT
                 seller_status_id
             FROM sellers
             WHERE 
                 id = :id
-            """), {'id':seller_id}).fetchone()
+            """), {'id': seller_id}).fetchone()
+
+        if seller_status_id is None:
+            raise NoDataException(500, 'get_status_id select error')
