@@ -112,7 +112,7 @@ class SellerService:
             
             try:
                 client.chat_postMessage(
-                    channel=current_app.config['CHANNEL'],
+                    channel=current_app.config.slack_channel['CHANNEL'],
                     text=f'id {seller_id}번 셀러의 상태가 입점으로 변경되었습니다.',
                 )
             except SlackApiError:
@@ -128,7 +128,7 @@ class SellerService:
             
             try:
                 client.chat_postMessage(
-                    channel=current_app.config['CHANNEL'],
+                    channel=current_app.config.slack_channel['CHANNEL'],
                     text=f'id {seller_id}번 셀러의 상태가 퇴점대기로 변경되었습니다.',
                 )
             except SlackApiError:
@@ -144,7 +144,7 @@ class SellerService:
             
             try:
                 client.chat_postMessage(
-                    channel=current_app.config['CHANNEL'],
+                    channel=current_app.config.slack_channel['CHANNEL'],
                     text=f'id {seller_id}번 셀러의 상태가 휴점으로 변경되었습니다.',
                 )
             except SlackApiError:
@@ -159,7 +159,7 @@ class SellerService:
             
             try:
                 client.chat_postMessage(
-                    channel=current_app.config['CHANNEL'],
+                    channel=current_app.config.slack_channel['CHANNEL'],
                     text=f'id {seller_id}번 셀러의 상태가 입점거절로 변경되었습니다.',
                 )
             except SlackApiError:
@@ -174,10 +174,15 @@ class SellerService:
             
             try:
                 client.chat_postMessage(
-                    channel=current_app.config['CHANNEL'],
+                    channel=current_app.config.slack_channel['CHANNEL'],
                     text=f'id {seller_id}번 셀러의 상태가 퇴점으로 변경되었습니다.',
                 )
             except SlackApiError:
                 return 'message fail'
             
             self.seller_dao.status_change_closed_store(seller_id, session)
+
+    def get_home_data(self, seller_id, session):
+        home_data = self.seller_dao.select_home_data(seller_id, session)
+
+        return home_data

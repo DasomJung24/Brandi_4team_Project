@@ -4,6 +4,49 @@ from exceptions import NoAffectedRowException, NoDataException
 
 class ProductDao:
 
+    def select_category_list(self, session):
+        category_list = session.execute(text("""
+            SELECT 
+                id, 
+                name
+            FROM categories
+        """)).fetchall()
+
+        return category_list
+
+    def select_color_list(self, session):
+        color_list = session.execute(text("""
+                    SELECT 
+                        id, 
+                        name
+                    FROM colors
+                """)).fetchall()
+
+        return color_list
+
+    def select_size_list(self, session):
+        size_list = session.execute(text("""
+                    SELECT 
+                        id, 
+                        name
+                    FROM sizes
+                """)).fetchall()
+
+        return size_list
+
+    def select_sub_categories(self, category_id, session):
+        # 1차 카테고리 아이디로 2차 카테고리 목록 불러오기
+        sub_list = session.execute(text("""
+            SELECT
+                id,
+                name
+            FROM sub_categories
+            WHERE
+                categories_id = :categories_id
+        """), {'categories_id': category_id}).fetchall()
+
+        return {'sub_category_list': [dict(row) for row in sub_list]}
+
     def insert_product_data(self, product_data, session):
         # 상품 등록하기
         product_id = session.execute(text("""
@@ -137,8 +180,7 @@ class ProductDao:
         product_data = session.execute(text("""
             SELECT
                 *
-            FROM
-                products
+            FROM products
             WHERE
                 id = :id
         """), {'id': product_id}).fetchone()
@@ -148,12 +190,12 @@ class ProductDao:
 
         return product_data
 
+    # 상품의 옵션 정보 가져오기
     def select_product_options(self, product_id, session):
         options = session.execute(text("""
             SELECT
                 *
-            FROM
-                options
+            FROM options
             WHERE
                 product_id = :product_id
         """), {'product_id': product_id}).fetchall()
@@ -162,20 +204,18 @@ class ProductDao:
             raise NoDataException(500, 'select_product_options select error')
 
         return options
-        # return {'options': [dict(row) for row in options]}
 
+    # 상품의 이미지 리스트 가져오기
     def select_product_images(self, product_id, session):
         images = session.execute(text("""
             SELECT
                 *
-            FROM
-                sub_images
+            FROM sub_images
             WHERE
                 product_id = :product_id
         """), {'product_id': product_id}).fetchall()
 
         return images
-        # return {'images': [dict(row) for row in images]}
 
     # 상품데이터 업데이트하기
     def update_product_data(self, product_data, session):
@@ -288,8 +328,7 @@ class ProductDao:
         image_data = session.execute(text("""
             SELECT 
                 *
-            FROM
-                sub_images
+            FROM sub_images
             WHERE
                 product_id = :product_id
         """), {'product_id': image_list[0]['product_id']}).fetchall()
@@ -333,8 +372,7 @@ class ProductDao:
                 is_sell,
                 is_display,
                 is_discount
-            FROM
-                products
+            FROM products
             WHERE
                 seller_id = :seller_id """
 

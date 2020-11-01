@@ -4,9 +4,9 @@ from flask import Flask
 from sqlalchemy import create_engine
 from flask_cors import CORS
 
-from model import SellerDao, ProductDao
-from service import SellerService, ProductService
-from view import seller_endpoints, product_endpoints
+from model import SellerDao, ProductDao, OrderDao
+from service import SellerService, ProductService, OrderService
+from view import seller_endpoints, product_endpoints, order_endpoints
 from sqlalchemy.orm import sessionmaker
 
 
@@ -45,14 +45,17 @@ def create_app(test_config=None):
     # Persistence Layer
     seller_dao = SellerDao()
     product_dao = ProductDao()
+    order_dao = OrderDao()
 
     # Business Layer
     services = Services
     services.seller_service = SellerService(seller_dao, app.config)
     services.product_service = ProductService(product_dao)
+    services.order_service = OrderService(order_dao)
 
     seller_endpoints(app, services, get_session)
     product_endpoints(app, services, get_session)
+    order_endpoints(app, services, get_session)
 
     return app
 

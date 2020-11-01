@@ -254,9 +254,9 @@ def seller_endpoints(app, services, get_session):
                 session.rollback()
                 return jsonify({'message': 'no data {}'.format(e)}), e.status_code
 
-            # except Exception as e:
-            #     session.rollback()
-            #     return jsonify({'message': '{}'.format(e)}), 500
+            except Exception as e:
+                session.rollback()
+                return jsonify({'message': '{}'.format(e)}), 500
 
             finally:
                 if session:
@@ -298,3 +298,22 @@ def seller_endpoints(app, services, get_session):
             finally:
                 if session:
                     session.close()
+
+    @app.route("/home", methods=['GET'])
+    @login_required
+    def get_home_seller():
+        session = None
+        try:
+            session = get_session()
+
+            data = seller_service.get_home_data(g.seller_id, session)
+
+            return jsonify(data), 200
+
+        except Exception as e:
+            session.rollback()
+            return jsonify({'message': '{}'.format(e)}), 500
+
+        finally:
+            if session:
+                session.close()

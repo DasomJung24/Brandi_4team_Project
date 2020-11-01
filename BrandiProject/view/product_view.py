@@ -7,42 +7,79 @@ from exceptions import NoAffectedRowException, NoDataException
 def product_endpoints(app, services, get_session):
     product_service = services.product_service
 
-    @app.route("/product/register", methods=['POST'])
+    @app.route("/product/register", methods=['GET', 'POST'])
     @login_required
     def register_product():
-        # 상품 등록하기
+        if request.method == 'GET':
+            # 상품 등록하기 페이지 들어갔을 때 1차 카테고리, 색상, 사이즈 불러오기
+            session = None
+            try:
+                session = get_session()
+                data_list = product_service.get_category_color_size(session)
+
+                return jsonify(data_list), 200
+
+            except Exception as e:
+                session.rollback()
+                return jsonify({'message': '{}'.format(e)}), 500
+
+            finally:
+                if session:
+                    session.close()
+
+        if request.method == 'POST':
+            # 상품 등록하기
+            session = None
+            try:
+                session = get_session()
+                product_data = request.json
+                product_data['seller_id'] = g.seller_id
+
+                # 입력되야 하는 필수값들이 안들어왔을 때 에러 발생
+                if product_data['sub_categories_id'] is None or product_data['name'] is None or \
+                        product_data['main_image'] is None or product_data['is_sell'] is None or \
+                        product_data['is_display'] is None or product_data['is_discount'] is None or \
+                        product_data['price'] is None or product_data['detail'] is None or \
+                        product_data['maximum_sell_count'] is None or product_data['minimum_sell_count'] is None:
+                    return jsonify({'message': 'invalid request'}), 400
+
+                if product_data['options'] is None:
+                    return jsonify({'message': 'options not exist'}), 400
+
+                for options in product_data['options']:
+                    if options['color_id'] is None or options['size_id'] is None or options['is_inventory_manage'] is None:
+                        return jsonify({'message': 'option data not exist'}), 400
+
+                product_service.post_register_product(product_data, session)
+
+                session.commit()
+                return jsonify({'message': 'success'}), 200
+
+            except KeyError:
+                return jsonify({'message': 'key error'}), 400
+
+            except NoAffectedRowException as e:
+                session.rollback()
+                return jsonify({'message': 'no affected row error {}'.format(e.message)}), e.status_code
+
+            except Exception as e:
+                session.rollback()
+                return jsonify({'message': '{}'.format(e)}), 500
+
+            finally:
+                if session:
+                    session.close()
+
+    @app.route("/category/<int:category_id>", methods=['GET'])
+    @login_required
+    def get_sub_category_list(category_id):
+        # 1차 카테고리 선택했을 때 2차 카테고리 리스트 불러오기
         session = None
         try:
             session = get_session()
-            product_data = request.json
-            product_data['seller_id'] = g.seller_id
+            category_list = product_service.get_sub_categories(category_id, session)
 
-            # 입력되야 하는 필수값들이 안들어왔을 때 에러 발생
-            if product_data['sub_categories_id'] is None or product_data['name'] is None or \
-                    product_data['main_image'] is None or product_data['is_sell'] is None or \
-                    product_data['is_display'] is None or product_data['is_discount'] is None or \
-                    product_data['price'] is None or product_data['detail'] is None or \
-                    product_data['maximum_sell_count'] is None or product_data['minimum_sell_count'] is None:
-                return jsonify({'message': 'invalid request'}), 400
-
-            if product_data['options'] is None:
-                return jsonify({'message': 'options not exist'}), 400
-
-            for options in product_data['options']:
-                if options['color_id'] is None or options['size_id'] is None or options['is_inventory_manage'] is None:
-                    return jsonify({'message': 'option data not exist'}), 400
-
-            product_service.post_register_product(product_data, session)
-
-            session.commit()
-            return jsonify({'message': 'success'}), 200
-
-        except KeyError:
-            return jsonify({'message': 'key error'}), 400
-
-        except NoAffectedRowException as e:
-            session.rollback()
-            return jsonify({'message': 'no affected row error {}'.format(e.message)}), e.status_code
+            return category_list
 
         except Exception as e:
             session.rollback()

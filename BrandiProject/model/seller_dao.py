@@ -96,8 +96,7 @@ class SellerDao:
                 brand_name_english,
                 account,
                 brand_crm_number
-            FROM 
-                sellers
+            FROM sellers
             WHERE 
                 id = :id
         """), {'id': seller_id}).fetchone()
@@ -111,8 +110,7 @@ class SellerDao:
                 name,
                 email,
                 phone_number
-            FROM 
-                manager_informations
+            FROM manager_informations
             WHERE
                 seller_id = :seller_id
         """), {'seller_id': seller_id}).fetchall()
@@ -412,8 +410,8 @@ class SellerDao:
         if history_row == 0:
             raise NoAffectedRowException(500, 'status_change_refused_store insert error')
 
-    # 셀러상태 퇴점으로 변경
     def status_change_closed_store(self, seller_id, session):
+        # 셀러상태 퇴점으로 변경
         update_row = session.execute(text("""
             UPDATE
                 sellers
@@ -427,6 +425,7 @@ class SellerDao:
         if update_row == 0:
             raise NoAffectedRowException(500, 'status_change_closed_store update error')
 
+        # 셀러 상태 히스토리 등록 하기
         history_row = session.execute(text("""
             INSERT INTO seller_status_histories (
                 update_time,
@@ -442,8 +441,8 @@ class SellerDao:
         if history_row == 0:
             raise NoAffectedRowException(500, 'status_change_closed_store insert error')
 
-    # 셀러 입점상태 가져오기
     def get_status_id(self, seller_id, session):
+        # 셀러 입점상태 가져오기
         seller_status_id = session.execute(text("""
             SELECT
                 seller_status_id
@@ -454,3 +453,47 @@ class SellerDao:
 
         if seller_status_id is None:
             raise NoDataException(500, 'get_status_id select error')
+
+    def select_home_data(self, seller_id, session):
+        total_products = session.execute(text("""
+            SELECT
+                count(*)
+            FROM products
+            WHERE
+                seller_id = :seller_id
+        """), {'seller_id': seller_id}).fetchone()
+
+        display_products = session.execute(text("""
+            SELECT 
+                count(*) 
+            FROM products	
+            WHERE 
+                is_display = 1
+            AND 
+                seller_id = :seller_id
+        """), {'seller_id': seller_id}).fetchone()
+
+        prepare_shipment = session.execute(text("""
+            SELECT
+                count(*)
+            FROM order_details
+            WHERE
+                order_status_id = 1
+            AND
+                seller_id = :seller_id
+        """), {'seller_id': seller_id}).fetchone()
+
+        complete_shipment = session.execute(text("""
+            SELECT
+                count(*)
+            FROM order_details
+            WHERE
+                order_status_id = 3
+            AND
+                seller_id = :seller_id
+        """), {'seller_id': seller_id}).fetchone()
+
+        return {'total_count': total_products['count'],
+                'display_count': display_products['count'],
+                'prepare_count': prepare_shipment['count'],
+                'complete_count': complete_shipment['count']}

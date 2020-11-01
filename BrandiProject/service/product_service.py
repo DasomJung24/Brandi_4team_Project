@@ -5,6 +5,34 @@ class ProductService:
     def __init__(self, product_dao):
         self.product_dao = product_dao
 
+    def get_category_color_size(self, session):
+        """
+        :param session:
+        :return: {
+                    "categories":[
+                        {"id": 1, "name": "아우터"},
+                        {"id": 2, "name": "상의"},
+                        ...
+                        ],
+                    "colors":[
+                        {"id": 1, "name":"Black"},
+                        {"id": 2, "name":"White"},
+                        ...
+                        ],
+                    "sizes":[
+                        {"id": 1, "name":"free"},
+                        ...
+                        ]
+                }
+        """
+        category_list = self.product_dao.select_category_list(session)
+        color_list = self.product_dao.select_color_list(session)
+        size_list = self.product_dao.select_size_list(session)
+
+        return {'categories': [dict(row) for row in category_list],
+                'colors': [dict(row) for row in color_list],
+                'sizes': [dict(row) for row in size_list]}
+
     def post_register_product(self, product_data, session):
         # 상품 등록하기
         # 상품 선분이력 close_time 설정하기
@@ -23,6 +51,12 @@ class ProductService:
                 image['product_id'] = product_id
                 self.product_dao.insert_data_sub_image(image, session)
 
+    def get_sub_categories(self, category_id, session):
+        # 1차 카테고리 선택했을 때 2차 카테고리 리스트 불러오기
+        sub_list = self.product_dao.select_sub_categories(category_id, session)
+
+        return sub_list
+
     def get_product(self, product_id, session):
         # 상품 수정 페이지 들어갔을 때 등록된 상품 정보 가져오기
         product_data = self.product_dao.select_product_data(product_id, session)
@@ -30,7 +64,7 @@ class ProductService:
         sub_images = self.product_dao.select_product_images(product_id, session)
 
         # 새로운 상품 데이터 리스트 만들면서 할인가, 시간 형식 수정
-        product = {}
+        product = dict()
         product['is_sell'] = product_data['is_sell']
         product['is_display'] = product_data['is_display']
         product['sub_categories_id'] = product_data['sub_categories_id']
@@ -85,7 +119,7 @@ class ProductService:
 
         # 등록시간과 할인가격을 수정/추가하면서 새로운 리스트를 만듬
         for product in products_list:
-            product_data = {}
+            product_data = dict()
             product_data['name'] = product['name']
             product_data['product_id'] = product['id']
             product_data['main_image'] = product['main_image']
