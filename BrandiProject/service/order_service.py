@@ -27,6 +27,7 @@ class OrderService:
             product['price'] = round(int(product_data['price']*(100-product_data['discount_rate'])/100), -1)
         else:
             product['price'] = product_data['price']
+
         option_data = []
 
         # 옵션 정보 가져와서 컬러 이름이랑 사이즈 이름 가져오기
@@ -55,7 +56,7 @@ class OrderService:
         self.order_dao.insert_order_data(order_data, product_id, option_id, seller_id, session)
 
     def get_order_product_list(self, query_string_list, session):
-        """
+        """ 셀러 상품 리스트 가져오기
         :param query_string_list:
         :param session:
         :return: {
@@ -73,7 +74,7 @@ class OrderService:
                 }
         """
 
-        # 셀러의 상품 중에 상품 준비중에 해당하는 상품들의 리스트 가져오기
+        # 셀러의 상품들의 리스트 가져오기
         order_products = self.order_dao.select_order_products(query_string_list, session)
         orders = order_products['order_list']
         order_list = []
@@ -106,7 +107,7 @@ class OrderService:
         return {'order_list': [dict(row) for row in order_list]}
 
     def change_order_status(self, order_id_list, shipment_button, session):
-        """
+        """ 셀러가 주문 상태 변화 버튼 눌렀을 때 주문 상태 데이터 업데이트 하기
         셀러가 누르는 주문 상태 변화 버튼
         배송 처리 버튼 : 1  -> SHIPMENT
         배송 완료 처리 버튼 : 2   -> SHIPMENT_COMPLETE
@@ -132,6 +133,7 @@ class OrderService:
          ## 요청사항?
         """
         order = self.order_dao.select_order_details(order_id, session)
+
         order_data = dict()
         order_data['detail_number'] = order['detail_number']
         order_data['number'] = order['number']

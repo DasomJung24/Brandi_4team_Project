@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from flask import current_app
 from slack import WebClient
 from slack.errors import SlackApiError
+from config import slack_channel, status, action_button
 
 
 class SellerService:
@@ -56,24 +57,51 @@ class SellerService:
     def get_my_page(self, seller_id, session):
         # 셀러상세페이지에 등록된 셀러 데이터 불러오기
         seller = self.seller_dao.get_seller_information(seller_id, session)
-        
-        # 셀러 상태 변경 히스토리는 1개 이상이기 때문에 배열로 받아옴
-        for history in seller['status_histories']:
-            history['update_time'] = history['update_time'].strftime('%Y-%m-%d %H:%M:%S')
+        manager = self.seller_dao.get_manager_information(seller_id, session)
+        seller_status = self.seller_dao.get_seller_status_histories(seller_id, session)
 
-        return seller
+        seller_data = dict()
+        seller_data['id'] = seller['id']
+        seller_data['image'] = seller['image']
+        seller_data['background_image'] = seller['background_image']
+        seller_data['simple_introduce'] = seller['simple_introduce']
+        seller_data['detail_introduce'] = seller['detail_introduce']
+        seller_data['brand_crm_open'] = seller['brand_crm_open']
+        seller_data['brand_crm_end'] = seller['brand_crm_end']
+        seller_data['is_brand_crm_holiday'] = seller['is_brand_crm_holiday']
+        seller_data['zip_code'] = seller['zip_code']
+        seller_data['address'] = seller['address']
+        seller_data['detail_address'] = seller['detail_address']
+        seller_data['delivery_information'] = seller['delivery_information']
+        seller_data['refund_exchange_information'] = seller['refund_exchange_information']
+        seller_data['seller_status_id'] = seller['seller_status_id']
+        seller_data['brand_name_korean'] = seller['brand_name_korean']
+        seller_data['brand_name_english'] = seller['brand_name_english']
+        seller_data['account'] = seller['account']
+        seller_data['brand_crm_number'] = seller['brand_crm_number']
+        seller_data['manager_information'] = [dict(row) for row in manager]
+        status_histories = []
+        # 셀러 상태 변경 히스토리는 1개 이상이기 때문에 배열로 받아옴
+        for history in seller_status:
+            status = dict()
+            status['seller_status_id'] = history['seller_status_id']
+            status['update_time'] = history['update_time'].strftime('%Y-%m-%d %H:%M:%S')
+            status_histories.append(status)
+
+        seller_data['status_histories'] = status_histories
+
+        return seller_data
 
     def post_my_page(self, seller_data, session):
         # 셀러상세페이지 셀러의 정보 데이터베이스에 넣기
-        seller = seller_data['seller']
         manager_information = seller_data['manager_information']
 
-        self.seller_dao.update_seller_information(seller, session)
+        self.seller_dao.update_seller_information(seller_data, session)
 
         ordering = 1
         for manager in manager_information:
             manager['ordering'] = ordering
-            manager['seller_id'] = seller['id']
+            manager['seller_id'] = seller_data['id']
             self.seller_dao.update_manager_information(manager, session)
             ordering += 1
 
@@ -104,15 +132,15 @@ class SellerService:
         client = WebClient(token=current_app.config['SLACK_API_TOKEN'])
 
         # 입점승인, 퇴점철회, 휴점해제 버튼이 눌린 셀러의 상태가 입점이면 에러 발생
-        if button == current_app.config.action_button['STORE_BUTTON'] or \
-                button == current_app.config.action_button['CANCELED_CLOSED_BUTTON'] or \
-                button == current_app.config.action_button['CANCELED_TEMP_CLOSED_BUTTON']:
-            if seller_status['seller_status_id'] == current_app.config.status['STORE']:
+        if button == action_button['STORE_BUTTON'] or \
+                button == action_button['CANCELED_CLOSED_BUTTON'] or \
+                button == action_button['CANCELED_TEMP_CLOSED_BUTTON']:
+            if seller_status['seller_status_id'] == status['STORE']:
                 return 'invalid request'
             
             try:
                 client.chat_postMessage(
-                    channel=current_app.config.slack_channel['CHANNEL'],
+                    channel=slack_channel['CHANNEL'],
                     text=f'id {seller_id}번 셀러의 상태가 입점으로 변경되었습니다.',
                 )
             except SlackApiError:
@@ -121,14 +149,14 @@ class SellerService:
             self.seller_dao.status_change_store(seller_id, session)
 
         # 퇴점대기 버튼이 눌린 셀러의 상태가  입점대기, 퇴점대기이면 에러 발생
-        if button == current_app.config.action_button['CLOSED_WAIT_BUTTON']:
-            if seller_status['seller_status_id'] == current_app.config.status['STORE_WAIT'] or\
-                    seller_status['seller_status_id'] == current_app.config.status['CLOSED_WAIT']:
+        if button == action_button['CLOSED_WAIT_BUTTON']:
+            if seller_status['seller_status_id'] == status['STORE_WAIT'] or\
+                    seller_status['seller_status_id'] == status['CLOSED_WAIT']:
                 return 'invalid request'
             
             try:
                 client.chat_postMessage(
-                    channel=current_app.config.slack_channel['CHANNEL'],
+                    channel=slack_channel['CHANNEL'],
                     text=f'id {seller_id}번 셀러의 상태가 퇴점대기로 변경되었습니다.',
                 )
             except SlackApiError:
@@ -137,14 +165,14 @@ class SellerService:
             self.seller_dao.status_change_closed_wait(seller_id, session)
 
         # 휴점처리 버튼이 눌린 셀러의 상태가 입점대기, 휴점이면 에러 발생
-        if button == current_app.config.action_button['TEMP_CLOSED_BUTTON']:
-            if seller_status['seller_status_id'] == current_app.config.status['STORE_WAIT'] or \
-                    seller_status['seller_status_id'] == current_app.config.status['TEMP_CLOSED']:
+        if button == action_button['TEMP_CLOSED_BUTTON']:
+            if seller_status['seller_status_id'] == status['STORE_WAIT'] or \
+                    seller_status['seller_status_id'] == status['TEMP_CLOSED']:
                 return 'invalid request'
             
             try:
                 client.chat_postMessage(
-                    channel=current_app.config.slack_channel['CHANNEL'],
+                    channel=slack_channel['CHANNEL'],
                     text=f'id {seller_id}번 셀러의 상태가 휴점으로 변경되었습니다.',
                 )
             except SlackApiError:
@@ -153,13 +181,13 @@ class SellerService:
             self.seller_dao.status_change_temporarily_closed(seller_id, session)
 
         # 입점거절 버튼이 눌린 셀러의 상태가 입점대기가 아니면 에러 발생
-        if button == current_app.config.action_button['REFUSE_STORE_BUTTON']:
-            if seller_status['seller_status_id'] != current_app.config.status['STORE_WAIT']:
+        if button == action_button['REFUSE_STORE_BUTTON']:
+            if seller_status['seller_status_id'] != status['STORE_WAIT']:
                 return 'invalid request'
             
             try:
                 client.chat_postMessage(
-                    channel=current_app.config.slack_channel['CHANNEL'],
+                    channel=slack_channel['CHANNEL'],
                     text=f'id {seller_id}번 셀러의 상태가 입점거절로 변경되었습니다.',
                 )
             except SlackApiError:
@@ -168,13 +196,13 @@ class SellerService:
             self.seller_dao.status_change_refused_store(seller_id, session)
 
         # 퇴점확정 버튼이 눌린 셀러의 상태가 퇴점대기가 아니라면 에러 발생
-        if button == current_app.config.action_button['CONFIRM_CLOSED_BUTTON']:
-            if seller_status['seller_status_id'] != current_app.config.status['CLOSED_WAIT']:
+        if button == action_button['CONFIRM_CLOSED_BUTTON']:
+            if seller_status['seller_status_id'] != status['CLOSED_WAIT']:
                 return 'invalid request'
             
             try:
                 client.chat_postMessage(
-                    channel=current_app.config.slack_channel['CHANNEL'],
+                    channel=slack_channel['CHANNEL'],
                     text=f'id {seller_id}번 셀러의 상태가 퇴점으로 변경되었습니다.',
                 )
             except SlackApiError:
@@ -186,3 +214,63 @@ class SellerService:
         home_data = self.seller_dao.select_home_data(seller_id, session)
 
         return home_data
+
+    def get_seller_page(self, seller_id, session):
+        # 마스터가 셀러의 계정 정보 가져오기
+        is_master = self.seller_dao.is_master(seller_id, session)
+
+        # 마스터 계정이 아닐 때 에러 발생
+        if is_master['is_master'] is False:
+            return 'not authorizated'
+
+        seller = self.seller_dao.get_seller_information(seller_id, session)
+        manager = self.seller_dao.get_manager_information(seller_id, session)
+        seller_status = self.seller_dao.get_seller_status_histories(seller_id, session)
+
+        seller_data = dict()
+        seller_data['id'] = seller['id']
+        seller_data['image'] = seller['image']
+        seller_data['background_image'] = seller['background_image']
+        seller_data['simple_introduce'] = seller['simple_introduce']
+        seller_data['detail_introduce'] = seller['detail_introduce']
+        seller_data['brand_crm_open'] = seller['brand_crm_open']
+        seller_data['brand_crm_end'] = seller['brand_crm_end']
+        seller_data['is_brand_crm_holiday'] = seller['is_brand_crm_holiday']
+        seller_data['zip_code'] = seller['zip_code']
+        seller_data['address'] = seller['address']
+        seller_data['detail_address'] = seller['detail_address']
+        seller_data['delivery_information'] = seller['delivery_information']
+        seller_data['refund_exchange_information'] = seller['refund_exchange_information']
+        seller_data['seller_status_id'] = seller['seller_status_id']
+        seller_data['brand_name_korean'] = seller['brand_name_korean']
+        seller_data['brand_name_english'] = seller['brand_name_english']
+        seller_data['seller_property_id'] = seller['seller_property_id']
+        seller_data['account'] = seller['account']
+        seller_data['brand_crm_number'] = seller['brand_crm_number']
+        seller_data['manager_information'] = [dict(row) for row in manager]
+        status_histories = []
+        # 셀러 상태 변경 히스토리는 1개 이상이기 때문에 배열로 받아옴
+        for history in seller_status:
+            status = dict()
+            status['account'] = seller['account']
+            status['seller_status_id'] = history['seller_status_id']
+            status['update_time'] = history['update_time'].strftime('%Y-%m-%d %H:%M:%S')
+            status_histories.append(status)
+
+        seller_data['status_histories'] = status_histories
+
+        return seller_data
+
+    def post_master_seller_page(self, seller_data, seller_id, session):
+        # 셀러상세페이지 셀러의 정보 데이터베이스에 넣기
+        manager_information = seller_data['manager_information']
+        seller_data['id'] = seller_id
+
+        self.seller_dao.update_seller_information_master(seller_data, session)
+
+        ordering = 1
+        for manager in manager_information:
+            manager['ordering'] = ordering
+            manager['seller_id'] = seller_id
+            self.seller_dao.update_manager_information(manager, session)
+            ordering += 1

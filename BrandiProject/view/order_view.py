@@ -1,5 +1,6 @@
 import re
 from flask import request, jsonify, g
+from flask_request_validator import Param, JSON, validate_params, Pattern
 from .seller_view import login_required
 from exceptions import NoDataException, NoAffectedRowException
 
@@ -28,12 +29,13 @@ def order_endpoints(app, services, get_session):
                     session.close()
 
         if request.method == 'POST':
-            # 주문 정보 데이터에 저장하기
+            # 주문하기 클릭시 주문 정보 데이터에 저장하기
             session = None
             try:
                 session = get_session()
                 order_data = request.json
 
+                # 있어야 하는 키값이 None 일 때 에러 발생
                 if order_data['user_name'] is None or order_data['phone_number'] is None \
                         or order_data['zip_code'] is None or order_data['address'] is None \
                         or order_data['detail_address'] is None or order_data['count'] is None \
@@ -69,7 +71,7 @@ def order_endpoints(app, services, get_session):
     @login_required
     def order_prepare(order_status_id):
 
-        # 셀러 상품준비 관리 - '상품준비중' 인 상품 리스트 가져오기
+        # 셀러 상품준비 관리 -  셀러한테 등록되어 있는 상품 리스트 가져오기
         session = None
         try:
             session = get_session()
@@ -169,17 +171,21 @@ def order_endpoints(app, services, get_session):
 
     @app.route("/order/change_number", methods=['POST'])
     @login_required
-    def change_phone_number():
+    @validate_params(
+        Param('phone_number', JSON, str, rules=[Pattern(r'^010-[0-9]{3,4}-[0-9]{4}$')]),
+        Param('order_id', JSON, int)
+    )
+    def change_phone_number(phone_number, order_id):
+        # 주문자 핸드폰 번호 수정하기
         session = None
         try:
             session = get_session()
-            data = request.json
+
             """
             {"order_id": 3, "phone_number":"010-456-7899"}
             """
 
-            if re.match(r'^010-[0-9]{3,4}-[0-9]{4}$', data['phone_number']) is None:
-                return jsonify({'message': 'invalid phone number'}), 400
+            data = {'phone_number': phone_number, 'order_id': order_id}
 
             order_service.change_number(data, session)
 

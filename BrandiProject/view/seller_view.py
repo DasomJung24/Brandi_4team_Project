@@ -1,6 +1,7 @@
 import jwt
 import re
 from flask import request, jsonify, g, current_app
+from flask_request_validator import Param, Pattern, validate_params, JSON, MinLength
 from functools import wraps
 from exceptions import NoAffectedRowException, NoDataException
 
@@ -33,30 +34,29 @@ def seller_endpoints(app, services, get_session):
     seller_service = services.seller_service
 
     @app.route("/signup", methods=['POST'])
-    def sign_up():
+    @validate_params(
+        Param('brand_crm_number', JSON, str, rules=[Pattern(r'^[0-9]{2,3}-[0-9]{3,4}-[0-9]{4}$')]),
+        Param('password', JSON, str, rules=[Pattern(r'^(?=.*[0-9])(?=.*[A-Za-z])(?=.*[^a-zA-Z0-9]).{8,20}$')]),
+        Param('phone_number', JSON, str, rules=[Pattern(r'^010-[0-9]{3,4}-[0-9]{4}$')]),
+        Param('account', JSON, str, rules=[MinLength(5)]),
+        Param('brand_name_korean', JSON, str),
+        Param('brand_name_english', JSON, str),
+        Param('seller_property_id', JSON, str)
+    )
+    def sign_up(*args):
         session = None
         try:
             session = get_session()
-            new_seller = request.json
 
-            # 필수 입력값이 들어있지 않을 때 에러 발생
-            if new_seller['account'] is None or new_seller['password'] is None or \
-                    new_seller['brand_name_korean'] is None or new_seller['brand_name_english'] is None or \
-                    new_seller['brand_crm_number'] is None or new_seller['seller_property_id'] is None or \
-                    new_seller['phone_number'] is None:
-                return jsonify({'message': 'invalid request'}), 400
-
-            # 전화번호 형식이 맞지 않을 때 에러 발생
-            if re.match(r'^[0-9]{2,3}-[0-9]{3,4}-[0-9]{4}$', new_seller['brand_crm_number']) is None:
-                return jsonify({'message': 'invalid crm number'}), 400
-
-            # 계정의 길이가 5 미만일 때 에러 발생
-            if len(new_seller['account']) < 5:
-                return jsonify({'message': 'short account'}), 400
-
-            # 비밀번호에 영문, 숫자, 기호가 최소 1개씩 포함되어야 하고 길이가 8-20이 아니면 에러 발생
-            if re.search(r'^(?=.*[0-9])(?=.*[A-Za-z])(?=.*[^a-zA-Z0-9]).{8,20}$', new_seller['password']) is None:
-                return jsonify({'message': 'invalid password'}), 400
+            new_seller = {
+                'brand_crm_number': args[0],
+                'password': args[1],
+                'phone_number': args[2],
+                'account': args[3],
+                'brand_name_korean': args[4],
+                'brand_name_english': args[5],
+                'seller_property_id': args[6]
+            }
 
             new_seller = seller_service.create_new_seller(new_seller, session)
 
@@ -152,8 +152,7 @@ def seller_endpoints(app, services, get_session):
             session = None
             try:
                 session = get_session()
-                seller_data = request.json
-                seller = seller_data['seller']
+                seller = request.json
 
                 # 셀러 정보에 입력되는 필수값중에 None 이 있으면 에러 발생
                 if seller['image'] is None or seller['simple_introduce'] is None or seller['brand_crm_number'] is None \
@@ -163,16 +162,15 @@ def seller_endpoints(app, services, get_session):
                     return jsonify({'message': 'invalid request'}), 400
 
                 # 전화번호 형식이 맞지 않을 때 에러 발생
-                if re.match(r'^[0-9]{2,3}-[0-9]{3,4}-[0-9]{4}$', seller['brand_crm_number']) \
-                        is None:
+                if re.match(r'^[0-9]{2,3}-[0-9]{3,4}-[0-9]{4}$', seller['brand_crm_number']) is None:
                     return jsonify({'message': 'invalid crm number'}), 400
 
                 # 담당자 정보가 없으면 에러 발생
-                if seller_data['manager_information'] is None:
+                if seller['manager_information'] is None:
                     return jsonify({'message': 'manager information not found'}), 400
 
                 # 담당자 정보 안에 이름, 번호, 이메일이 없으면 에러 발생
-                for manager in seller_data['manager_information']:
+                for manager in seller['manager_information']:
                     if manager['name'] is None or manager['phone_number'] is None or manager['email'] is None:
                         return jsonify({'message': 'no manager information data'}), 400
 
@@ -184,7 +182,7 @@ def seller_endpoints(app, services, get_session):
                     if re.match(r'^010-[0-9]{3,4}-[0-9]{4}$', manager['phone_number']) is None:
                         return jsonify({'message': 'invalid phone number'}), 400
 
-                seller_service.post_my_page(seller_data, session)
+                seller_service.post_my_page(seller, session)
 
                 session.commit()
                 return jsonify({'message': 'success'}), 200
@@ -201,7 +199,7 @@ def seller_endpoints(app, services, get_session):
                 if session:
                     session.close()
 
-    @app.route("/master/management-seller", methods=['GET', 'POST'])
+    @app.route("/master/management-seller", methods=['GET', 'PUT'])
     @login_required
     def management_seller():
         # 셀러계정관리(마스터)
@@ -262,8 +260,13 @@ def seller_endpoints(app, services, get_session):
                 if session:
                     session.close()
 
-        if request.method == 'POST':
-            # 셀러 status 변경하기 ( 입점상태 )
+        if request.method == 'PUT':
+            """
+            셀러 status 변경하기 ( 입점상태 )
+            {"seller_id":3,
+             "button":2}
+            """
+
             session = None
             try:
                 session = get_session()
@@ -302,6 +305,7 @@ def seller_endpoints(app, services, get_session):
     @app.route("/home", methods=['GET'])
     @login_required
     def get_home_seller():
+        # 홈(셀러) 정보 가져오기
         session = None
         try:
             session = get_session()
@@ -317,3 +321,82 @@ def seller_endpoints(app, services, get_session):
         finally:
             if session:
                 session.close()
+
+    @app.route("/master/management-seller/<int:seller_id>", methods=['GET', 'PUT'])
+    @login_required
+    def master_seller_page(seller_id):
+        if request.method == 'GET':
+            # 마스터가 셀러의 정보 가져올 때
+            session = None
+            try:
+                session = get_session()
+                seller_data = seller_service.get_seller_page(seller_id, session)
+
+                if seller_data == 'not authorizated':
+                    return jsonify({'message': 'not authorizated'})
+
+                return jsonify(seller_data)
+
+            except NoDataException as e:
+                session.rollback()
+                return jsonify({'message': 'no data {}'.format(e)}), e.status_code
+
+            except Exception as e:
+                session.rollback()
+                return jsonify({'message': '{}'.format(e)}), 500
+
+            finally:
+                if session:
+                    session.close()
+
+        if request.method == 'PUT':
+            # 마스터가 셀러의 정보 수정할 때
+            session = None
+            try:
+                session = get_session()
+                seller = request.json
+
+                # 셀러 정보에 입력되는 필수값중에 None 이 있으면 에러 발생
+                if seller['image'] is None or seller['simple_introduce'] is None or seller['brand_crm_number'] is None \
+                        or seller['zip_code'] is None or seller['address'] is None or seller['detail_address'] is None \
+                        or seller['brand_crm_open'] is None or seller['brand_crm_end'] is None \
+                        or seller['delivery_information'] is None or seller['refund_exchange_information'] is None:
+                    return jsonify({'message': 'invalid request'}), 400
+
+                # 전화번호 형식이 맞지 않을 때 에러 발생
+                if re.match(r'^[0-9]{2,3}-[0-9]{3,4}-[0-9]{4}$', seller['brand_crm_number']) is None:
+                    return jsonify({'message': 'invalid crm number'}), 400
+
+                # 담당자 정보가 없으면 에러 발생
+                if seller['manager_information'] is None:
+                    return jsonify({'message': 'manager information not found'}), 400
+
+                # 담당자 정보 안에 이름, 번호, 이메일이 없으면 에러 발생
+                for manager in seller['manager_information']:
+                    if manager['name'] is None or manager['phone_number'] is None or manager['email'] is None:
+                        return jsonify({'message': 'no manager information data'}), 400
+
+                    # 이메일 형식이 맞지 않을 때 에러 발생
+                    if re.match(r'^([0-9a-zA-Z_-]+)@([0-9a-zA-Z_-]+)\.([0-9a-zA-Z_-]+)$', manager['email']) is None:
+                        return jsonify({'message': 'invalid email'}), 400
+
+                    # 핸드폰 번호 형식이 맞지 않을 때 에러 발생
+                    if re.match(r'^010-[0-9]{3,4}-[0-9]{4}$', manager['phone_number']) is None:
+                        return jsonify({'message': 'invalid phone number'}), 400
+
+                seller_service.post_master_seller_page(seller,  seller_id, session)
+
+                session.commit()
+                return jsonify({'message': 'success'}), 200
+
+            except NoAffectedRowException as e:
+                session.rollback()
+                return jsonify({'message': 'no affected row error {}'.format(e.message)}), e.status_code
+
+            except Exception as e:
+                session.rollback()
+                return jsonify({'message': '{}'.format(e)}), 500
+
+            finally:
+                if session:
+                    session.close()

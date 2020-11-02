@@ -95,7 +95,8 @@ class SellerDao:
                 brand_name_korean,
                 brand_name_english,
                 account,
-                brand_crm_number
+                brand_crm_number,
+                seller_property_id
             FROM sellers
             WHERE 
                 id = :id
@@ -104,6 +105,9 @@ class SellerDao:
         if seller is None:
             raise NoDataException(500, 'get_seller_information select error')
 
+        return seller
+
+    def get_manager_information(self, seller_id, session):
         # 담당자 정보는 1개 이상이라 모두 가져와서 배열로 보내기
         managers = session.execute(text("""
             SELECT
@@ -117,7 +121,10 @@ class SellerDao:
 
         if managers is None:
             raise NoDataException(500, 'get_seller_information manager information select error')
-        
+
+        return managers
+
+    def get_seller_status_histories(self, seller_id, session):
         # 셀러 상태 변경 히스토리 가져오기
         seller_status = session.execute(text("""
             SELECT
@@ -130,9 +137,7 @@ class SellerDao:
         if seller_status is None:
             raise NoDataException(500, 'get_seller_information seller status select error')
         
-        return {'seller': seller,
-                'manager_information': [dict(row) for row in managers],
-                'status_histories': [dict(row) for row in seller_status]}
+        return seller_status
 
     # 셀러정보관리 페이지 업데이트
     def update_seller_information(self, seller, session):   # 셀러정보관리 페이지 update
@@ -237,6 +242,11 @@ class SellerDao:
             sql += """
             AND
                 a.brand_name_korean = :brand_name_korean """
+
+        if query_string_list['number']:
+            sql += """
+            AND
+                a.id = :number """
 
         if query_string_list['account']:
             sql += """
@@ -454,6 +464,8 @@ class SellerDao:
         if seller_status_id is None:
             raise NoDataException(500, 'get_status_id select error')
 
+        return seller_status_id
+
     def select_home_data(self, seller_id, session):
         total_products = session.execute(text("""
             SELECT
@@ -497,3 +509,34 @@ class SellerDao:
                 'display_count': display_products['count'],
                 'prepare_count': prepare_shipment['count'],
                 'complete_count': complete_shipment['count']}
+
+    def update_seller_information_master(self, seller, session):
+        # 마스터가 셀러정보를 업데이트할 때
+        update_row = session.execute(text("""
+            UPDATE
+                sellers
+            SET
+                image                       = :image,
+                background_image            = :background_image,
+                simple_introduce            = :simple_introduce,
+                detail_introduce            = :detail_introduce,
+                brand_crm_open              = :brand_crm_open,
+                brand_crm_end               = :brand_crm_end,
+                is_brand_crm_holiday        = :is_brand_crm_holiday,
+                zip_code                    = :zip_code,
+                address                     = :address,
+                detail_address              = :detail_address,
+                delivery_information        = :delivery_information,
+                refund_exchange_information = :refund_exchange_information,
+                seller_status_id            = :seller_status_id,
+                brand_name_korean           = :brand_name_korean,
+                brand_name_english          = :brand_name_english,
+                brand_crm_number            = :brand_crm_number,
+                seller_property_id          = :seller_property_id
+            WHERE
+                id = :id
+        """), seller).rowcount
+
+        # update 성공하면 해당하는 row 의 수 반환 실패하면 0 반환
+        if update_row == 0:
+            raise NoAffectedRowException(500, 'update_seller_information seller update error')

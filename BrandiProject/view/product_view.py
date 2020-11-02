@@ -1,6 +1,7 @@
 from datetime import datetime as dt
 from flask import request, jsonify, g
 from .seller_view import login_required
+from flask_request_validator import Param, PATH, validate_params
 from exceptions import NoAffectedRowException, NoDataException
 
 
@@ -46,6 +47,7 @@ def product_endpoints(app, services, get_session):
                 if product_data['options'] is None:
                     return jsonify({'message': 'options not exist'}), 400
 
+                # 옵션 안의 리스트의 키값들이 None 일 때 에러 발생
                 for options in product_data['options']:
                     if options['color_id'] is None or options['size_id'] is None or options['is_inventory_manage'] is None:
                         return jsonify({'message': 'option data not exist'}), 400
@@ -91,16 +93,15 @@ def product_endpoints(app, services, get_session):
 
     @app.route("/product/update/<int:product_id>", methods=['GET', 'POST'])
     @login_required
+    @validate_params(
+        Param('product_id', PATH, int)
+    )
     def update_product(product_id):
         if request.method == 'GET':
             # 상품상세페이지(수정) 상품 데이터 가져오기
             session = None
             try:
                 session = get_session()
-
-                # path param 에 상품 아이디가 오지 않았을 때 에러 발생
-                if product_id is None:
-                    return jsonify({'message': 'INVALID_REQUEST'}), 400
 
                 product_data = product_service.get_product(product_id, session)
 
@@ -140,7 +141,8 @@ def product_endpoints(app, services, get_session):
 
                 # 옵션 안의 키값들이 None 이면 에러 발생
                 for options in product_data['options']:
-                    if options['color_id'] is None or options['size_id'] is None or options['is_inventory_manage'] is None:
+                    if options['color_id'] is None or options['size_id'] is None \
+                            or options['is_inventory_manage'] is None:
                         return jsonify({'message': 'option data not exist'}), 400
 
                 product_data['seller_id'] = g.seller_id

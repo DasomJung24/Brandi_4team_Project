@@ -1,4 +1,4 @@
-from flask import current_app
+from config import product_record
 
 
 class ProductService:
@@ -36,7 +36,7 @@ class ProductService:
     def post_register_product(self, product_data, session):
         # 상품 등록하기
         # 상품 선분이력 close_time 설정하기
-        product_data['close_time'] = current_app.config['CLOSE_TIME']
+        product_data['close_time'] = product_record['CLOSE_TIME']
         product_id = self.product_dao.insert_product_data(product_data, session)
 
         ordering = 1
@@ -94,7 +94,7 @@ class ProductService:
 
     def post_update_product(self, product_data, session):
         # 상품 데이터 업데이트 하기
-        product_data['close_time'] = current_app.config['CLOSE_TIME']
+        product_data['close_time'] = product_record['CLOSE_TIME']
 
         options = product_data['options']
         for option in options:
@@ -102,7 +102,7 @@ class ProductService:
 
         self.product_dao.update_option(options, session)
 
-        if product_data['image_list'] is not None:
+        if product_data['image_list'] is False:
             image_list = product_data['image_list']
             for image in image_list:
                 image['product_id'] = product_data['product_id']
@@ -132,6 +132,8 @@ class ProductService:
             product_data['is_display'] = product['is_display']
             product_data['is_discount'] = product['is_discount']
             product_data['product_number'] = product['id']
+            product_data['seller_property_id'] = product['seller_property_id']
+            product_data['brand_name_korean'] = product['brand_name_korean']
             product_list.append(product_data)
 
         return {'product_list': product_list, 'total_count': products_data['total_count']}

@@ -5,6 +5,7 @@ from exceptions import NoAffectedRowException, NoDataException
 class ProductDao:
 
     def select_category_list(self, session):
+        # 1 차 카테고리 전체 리스트 가져오기
         category_list = session.execute(text("""
             SELECT 
                 id, 
@@ -15,6 +16,7 @@ class ProductDao:
         return category_list
 
     def select_color_list(self, session):
+        # 컬러 리스트 가져오기
         color_list = session.execute(text("""
                     SELECT 
                         id, 
@@ -25,6 +27,7 @@ class ProductDao:
         return color_list
 
     def select_size_list(self, session):
+        # 사이즈 리스트 가져오기
         size_list = session.execute(text("""
                     SELECT 
                         id, 
@@ -35,7 +38,7 @@ class ProductDao:
         return size_list
 
     def select_sub_categories(self, category_id, session):
-        # 1차 카테고리 아이디로 2차 카테고리 목록 불러오기
+        # 1차 카테고리 아이디로 2차 카테고리 목록 가져오기
         sub_list = session.execute(text("""
             SELECT
                 id,
@@ -137,8 +140,8 @@ class ProductDao:
 
         return product_id
 
-    # 옵션 데이터 등록하기
     def insert_data_option(self, option, session):
+        # 옵션 데이터 등록하기
         option = session.execute(text("""
             INSERT INTO options (
                 product_id,
@@ -160,8 +163,8 @@ class ProductDao:
         if option == 0:
             raise NoAffectedRowException(500, 'insert_data_option insert error')
 
-    # 서브 이미지 등록하기
     def insert_data_sub_image(self, image, session):
+        # 서브 이미지 등록하기
         image = session.execute(text("""
             INSERT INTO sub_images (
                 image,
@@ -175,8 +178,8 @@ class ProductDao:
         if image == 0:
             raise NoAffectedRowException(500, 'insert_data_sub_image insert error')
 
-    # 상품 데이터 가져오기
     def select_product_data(self, product_id, session):
+        # 상품 데이터 가져오기
         product_data = session.execute(text("""
             SELECT
                 *
@@ -190,8 +193,8 @@ class ProductDao:
 
         return product_data
 
-    # 상품의 옵션 정보 가져오기
     def select_product_options(self, product_id, session):
+        # 상품의 옵션 정보 가져오기
         options = session.execute(text("""
             SELECT
                 *
@@ -205,8 +208,8 @@ class ProductDao:
 
         return options
 
-    # 상품의 이미지 리스트 가져오기
     def select_product_images(self, product_id, session):
+        # 상품의 이미지 리스트 가져오기
         images = session.execute(text("""
             SELECT
                 *
@@ -217,8 +220,8 @@ class ProductDao:
 
         return images
 
-    # 상품데이터 업데이트하기
     def update_product_data(self, product_data, session):
+        # 상품데이터 업데이트하기
         product = session.execute(text("""
             UPDATE
                 products
@@ -248,6 +251,21 @@ class ProductDao:
         if product == 0:
             raise NoAffectedRowException(500, 'update_product_data update error')
 
+        # 바로 전 이력 close_time 현재 시간으로 수정하기
+        update_prerecord = session.execute(text("""
+                UPDATE
+                    product_records
+                SET 
+                    close_time = now()
+                WHERE
+                    product_id = :product_id
+                AND
+                    close_time = :close_time
+            """), product_data).rowcount
+
+        if update_prerecord == 0:
+            raise NoAffectedRowException(500, 'update_product_data pre-record update error')
+
         # 상품 이력관리
         product_record = session.execute(text("""
             INSERT INTO product_records (
@@ -274,22 +292,8 @@ class ProductDao:
         if product_record == 0:
             raise NoAffectedRowException(500, 'update_product_data record insert error')
 
-        # 바로 전 이력 close_time 현재 시간으로 수정하기
-        update_prerecord = session.execute(text("""
-            UPDATE
-                product_records
-            SET 
-                close_time = now()
-            WHERE
-                product_id = :product_id
-            AND
-                close_time = :close_time
-        """), product_data).rowcount
-
-        if update_prerecord == 0:
-            raise NoAffectedRowException(500, 'update_product_data pre-record update error')
-
     def update_option(self, options, session):
+        # 옵션 업데이트 하기
         delete_option = session.execute(text("""
             DELETE FROM 
                 options
@@ -362,19 +366,23 @@ class ProductDao:
     def select_product_list(self, query_string_list, session):
         sql = """
             SELECT
-                id,
-                created_at,
-                main_image,
-                name,
-                code_number,
-                price,
-                discount_rate,
-                is_sell,
-                is_display,
-                is_discount
-            FROM products
+                a.id,
+                a.created_at,
+                a.main_image,
+                a.name,
+                a.code_number,
+                a.price,
+                a.discount_rate,
+                a.is_sell,
+                a.is_display,
+                a.is_discount,
+                b.brand_name_korean,
+                b.seller_property_id
+            FROM products a
+            JOIN sellers b
+            ON a.seller_id = b.id
             WHERE
-                seller_id = :seller_id """
+                b.is_master = False """
 
         if query_string_list['is_sell']:
             sql += """

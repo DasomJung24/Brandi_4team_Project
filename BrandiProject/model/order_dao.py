@@ -81,6 +81,7 @@ class OrderDao:
             raise NoDataException(500, 'change_option_inventory select error')
 
         if option['is_inventory_manage'] is True:
+            # 재고관리여부가 True 이면 재고 수량 수정하기
             option_row = session.execute(text("""
                 UPDATE
                     options
@@ -354,6 +355,7 @@ class OrderDao:
         return order_data
 
     def select_order_histories(self, order_id, session):
+        # 주문 상태 변화 히스토리 목록 가져오기
         histories = session.execute(text("""
             SELECT
                 update_time,
@@ -366,6 +368,7 @@ class OrderDao:
         return histories
 
     def update_phone_number(self, data, session):
+        # 핸드폰 번호 수정하기
         update_row = session.execute(text("""
             UPDATE
                 orders
