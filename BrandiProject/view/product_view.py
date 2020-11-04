@@ -1,4 +1,3 @@
-from datetime import datetime as dt
 from flask import request, jsonify, g
 from .seller_view import login_required
 from flask_request_validator import Param, PATH, validate_params
@@ -91,7 +90,7 @@ def product_endpoints(app, services, get_session):
             if session:
                 session.close()
 
-    @app.route("/product/update/<int:product_id>", methods=['GET', 'POST'])
+    @app.route("/product/update/<int:product_id>", methods=['GET', 'PUT'])
     @login_required
     @validate_params(
         Param('product_id', PATH, int)
@@ -119,7 +118,7 @@ def product_endpoints(app, services, get_session):
                 if session:
                     session.close()
 
-        if request.method == 'POST':
+        if request.method == 'PUT':
             # 상품상세페이지(수정) 상품 데이터 업데이트하기
             session = None
             try:
@@ -177,24 +176,28 @@ def product_endpoints(app, services, get_session):
             is_discount = request.args.get('is_discount', None)
             is_display = request.args.get('is_display', None)
             name = request.args.get('name', None)
-            code_number = request.args.get('code', None)
-            product_number = request.args.get('product-number', None)
+            code_number = request.args.get('code_number', None)
+            product_number = request.args.get('product_id', None)
             start_date = request.args.get('start_date', None)
             end_date = request.args.get('end_date', None)
+            seller_property_id = request.args.get('seller_property_id', None)
+            brand_name_korean = request.args.get('brand_name_korean', None)
 
             # 쿼리스트링을 리스트로 만듬
             query_string_list = {
-                'limit': 10 if limit is None else int(limit),
-                'offset': 0 if offset is None else int(offset),
-                'is_sell': is_sell,
-                'is_discount': is_discount,
-                'is_display': is_display,
-                'name': name,
-                'code_number': code_number,
-                'product_number': product_number,
-                'start_date': start_date,
-                'end_date': end_date,
-                'seller_id': g.seller_id
+                'limit':                10 if limit is None else int(limit),
+                'offset':               0 if offset is None else int(offset),
+                'is_sell':              is_sell,
+                'is_discount':          is_discount,
+                'is_display':           is_display,
+                'name':                 name,
+                'code_number':          code_number,
+                'product_number':       product_number,
+                'start_date':           start_date,
+                'end_date':             end_date,
+                'seller_id':            g.seller_id,
+                'brand_name_korean':    brand_name_korean,
+                'seller_property_id':   seller_property_id
             }
 
             product_list = product_service.get_product_list(query_string_list, session)
@@ -203,7 +206,7 @@ def product_endpoints(app, services, get_session):
 
         except Exception as e:
             session.rollback()
-            return jsonify({'message': '{}'.format(e)})
+            return jsonify({'message': '{}'.format(e)}), 500
 
         finally:
             if session:

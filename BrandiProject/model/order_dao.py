@@ -5,13 +5,15 @@ from exceptions import NoAffectedRowException, NoDataException
 
 class OrderDao:
 
-    def select_product_data(self, product_id, session):
+    def select_product_data_for_order(self, product_id, session):
         # 상품 구매할 때 상품 정보 가져오기
         product_data = session.execute(text("""
             SELECT 
                 id,
                 price,
-                discount_rate
+                discount_rate,
+                maximum_sell_count,
+                minimum_sell_count
             FROM products
             WHERE
                 id = :id
@@ -20,43 +22,44 @@ class OrderDao:
         return product_data
 
     def select_product_option(self, product_id, session):
-        # 상품 구매할 때 옵션 정보 가져오기
+        # 상품 구매할 때 옵션 정보와 컬러이름, 사이즈 이름 가져오기
         options = session.execute(text("""
-            SELECT
-                color_id,
-                size_id,
-                is_inventory_manage,
-                count
-            FROM options 
-            WHERE
-                product_id = :product_id
+            SELECT 
+                a.size_id, 
+                a.color_id, 
+                a.is_inventory_manage, 
+                a.count, 
+                b.name as color_name, 
+                c.name as size_name 
+            FROM options a 
+            JOIN colors b 
+            ON a.color_id = b.id 
+            JOIN sizes c ON c.id=a.size_id 
+            WHERE 
+                a.product_id = :product_id
         """), {'product_id': product_id}).fetchall()
+
+        if options is None:
+            raise NoDataException(500, 'select_product_option select error')
 
         return options
 
-    def select_color_name(self, color_id, session):
-        # 상품 구매할때 컬러 이름 가져오기
-        color_name = session.execute(text("""
+    def check_product_stock(self, product_id, color_id, size_id, session):
+        # 상품 재고 수량 확인하기
+        stock = session.execute(text("""
             SELECT
-                name
-            FROM colors
+                count
+            FROM 
+                options
             WHERE
-                id = :id
-        """), {'id': color_id}).fetchone()
+                product_id = :product_id
+            AND 
+                size_id = :size_id
+            AND 
+                color_id = :color_id
+        """), {'product_id': product_id, 'size_id': size_id, 'color_id': color_id}).fetchone()
 
-        return color_name
-
-    def select_size_name(self, size_id, session):
-        # 상품 구매할 때 사이즈 이름 가져오기
-        size_name = session.execute(text("""
-            SELECT
-                name
-            FROM sizes
-            WHERE
-                id = :id
-        """), {'id': size_id}).fetchone()
-
-        return size_name
+        return stock
 
     def change_option_inventory(self, order_data, product_id, session):
         # 옵션의 재고 수량 수정하기
@@ -178,8 +181,9 @@ class OrderDao:
 
     def select_order_products(self, query_string_list, session):
         # 준비완료, 배송중, 배송완료, 구매확정 상품 리스트 가져오기
-        sql = """
+        data = """
             SELECT
+                a.id,
                 a.created_at,
                 a.number,
                 b.detail_number,
@@ -191,7 +195,19 @@ class OrderDao:
                 c.name,
                 d.update_time,
                 e.size_id,
-                e.color_id
+                e.color_id,
+                f.brand_name_korean,
+                b.total_price,
+                g.name as size_name,
+                h.name as color_name
+            """
+
+        count = """
+            SELECT
+                count(*) as cnt
+            """
+
+        sql = """
             FROM orders a
             JOIN order_details b
             ON a.id = b.order_id
@@ -202,57 +218,89 @@ class OrderDao:
             AND d.order_id = a.id
             JOIN options e
             ON e.id = b.option_id
+            JOIN sellers f
+            ON f.id = b.seller_id
+            JOIN sizes g
+            ON g.id = e.size_id
+            JOIN colors h
+            ON h.id = e.color_id
             WHERE
-                b.seller_id = :seller_id
-            AND
                 b.order_status_id = :order_status_id
         """
 
+        # 시작 날짜
         if query_string_list['start_date']:
             sql += """
             AND
                 d.update_time > :start_date """
 
+        # 끝나는 날짜
         if query_string_list['end_date']:
             sql += """
             AND
                 d.update_time < :end_date """
 
+        # 주문 번호
         if query_string_list['order_number']:
             sql += """
             AND
                 a.number = :order_number """
 
+        # 주문 상세 번호
         if query_string_list['detail_number']:
             sql += """
             AND
                 b.detail_number = :detail_number """
 
+        # 주문자
         if query_string_list['user_name']:
             sql += """
             AND
                 a.user_name = :user_name """
 
+        # 핸드폰 번호
         if query_string_list['phone_number']:
             sql += """
             AND
                 a.phone_number = :phone_number """
 
+        # 상품명
         if query_string_list['product_name']:
             sql += """
             AND
                 c.name = :product_name """
 
-        total_count = len(session.execute(text(sql), query_string_list).fetchall())
+        """
+        정렬하기 ( 닐짜순, 날짜 역순 )
+        order_by : a.created_at ASC / a.created_at DESC / d.update_time ASC / d.update_time DESC
+                       1           /           2        /        3          /         4
+        """
+        if query_string_list['order_by']:
+            if query_string_list['order_by'] == 1:
+                sql += """
+                ORDER BY a.created_at ASC """
+
+            if query_string_list['order_by'] == 2:
+                sql += """
+                ORDER BY a.created_at DESC """
+
+            if query_string_list['order_by'] == 3:
+                sql += """
+                ORDER BY d.update_time ASC """
+
+            if query_string_list['order_by'] == 4:
+                sql += """
+                ORDER BY d.update_time DESC """
+
+        total_count = session.execute(text(count+sql), query_string_list).fetchone()
 
         sql += """
-        ORDER BY :order_by
         LIMIT :limit
         OFFSET :offset """
 
-        order_list = session.execute(text(sql), query_string_list).fetchall()
+        order_list = session.execute(text(data+sql), query_string_list).fetchall()
 
-        return {'order_list': [dict(row) for row in order_list], 'total_count': total_count}
+        return {'order_list': [dict(row) for row in order_list], 'total_count': total_count['cnt']}
 
     def order_status_change_shipment(self, order_id, session):
         # 배송처리 버튼 눌러서 배송중으로 상태 바꾸기
@@ -263,7 +311,7 @@ class OrderDao:
                 order_status_id = 2
             WHERE
                 order_id = :order_id
-        """), {'order_id': order_id}).rowcount
+        """), order_id).rowcount
 
         if status_row == 0:
             raise NoAffectedRowException(500, 'order_status_change_shipment update error')
@@ -279,7 +327,7 @@ class OrderDao:
                 2,
                 :order_id
             )
-        """), {'order_id': order_id}).rowcount
+        """), order_id).rowcount
 
         if history_row == 0:
             raise NoAffectedRowException(500, 'order_status_change_shipment insert error')
@@ -293,7 +341,7 @@ class OrderDao:
                 order_status_id = 3
             WHERE
                 order_id = :order_id
-        """), {'order_id': order_id}).rowcount
+        """), order_id).rowcount
 
         if status_row == 0:
             raise NoAffectedRowException(500, 'order_status_change_complete update error')
@@ -309,7 +357,7 @@ class OrderDao:
                 3,
                 :order_id
             )
-        """), {'order_id': order_id}).rowcount
+        """), order_id).rowcount
 
         if history_row == 0:
             raise NoAffectedRowException(500, 'order_status_change_complete insert error')
@@ -335,7 +383,9 @@ class OrderDao:
                 c.id,
                 d.brand_name_korean,
                 e.size_id,
-                e.color_id
+                e.color_id,
+                f.name as color_name,
+                g.name as size_name
             FROM orders a
             JOIN order_details b
             ON a.id = b.order_id
@@ -343,8 +393,12 @@ class OrderDao:
             ON b.product_id = c.id
             JOIN sellers d 
             ON d.id = c.seller_id 
-            JOIN OPTIONS e 
+            JOIN options e 
             ON b.option_id = e.id
+            JOIN colors f
+            ON f.id = e.color_id
+            JOIN sizes g
+            ON g.id = e.size_id
             WHERE 
                 a.id = :order_id
         """), {'order_id': order_id}).fetchone()
@@ -379,4 +433,4 @@ class OrderDao:
         """), data).rowcount
 
         if update_row == 0:
-            raise NoAffectedRowException
+            raise NoAffectedRowException(500, 'update_phone_number update error')

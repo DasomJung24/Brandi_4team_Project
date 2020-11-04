@@ -3,6 +3,7 @@ from flask import request, jsonify, g
 from flask_request_validator import Param, JSON, validate_params, Pattern
 from .seller_view import login_required
 from exceptions import NoDataException, NoAffectedRowException
+from config import shipment_button
 
 
 def order_endpoints(app, services, get_session):
@@ -18,7 +19,7 @@ def order_endpoints(app, services, get_session):
                 session = get_session()
                 product_data = order_service.get_product_data(product_id, session)
 
-                return jsonify({'product_data': product_data}), 200
+                return jsonify(product_data), 200
 
             except Exception as e:
                 session.rollback()
@@ -46,7 +47,10 @@ def order_endpoints(app, services, get_session):
                 if re.match(r'^010-[0-9]{3,4}-[0-9]{4}$', order_data['phone_number']) is None:
                     return jsonify({'message': 'invalid phone number'}), 400
 
-                order_service.order_product(order_data, product_id, g.seller_id, session)
+                order_data = order_service.order_product(order_data, product_id, g.seller_id, session)
+
+                if order_data == 'invalid count':
+                    return jsonify({'message': "invalid count"}), 400
 
                 session.commit()
                 return jsonify({'message': 'success'}), 200
@@ -70,8 +74,7 @@ def order_endpoints(app, services, get_session):
     @app.route("/order/status/<int:order_status_id>", methods=['GET'])
     @login_required
     def order_prepare(order_status_id):
-
-        # 셀러 상품준비 관리 -  셀러한테 등록되어 있는 상품 리스트 가져오기
+        # 셀러 상품준비 관리 -  셀러한테 등록되어 있는 상품 주문 리스트 가져오기
         session = None
         try:
             session = get_session()
@@ -93,18 +96,18 @@ def order_endpoints(app, services, get_session):
             """
 
             query_string_list = {
-                'limit': 50 if limit is None else int(limit),
-                'offset': 0 if offset is None else int(offset),
-                'start_date': start_date,
-                'end_date': end_date,
-                'order_number': order_number,
-                'detail_number': detail_number,
-                'user_name': user_name,
-                'phone_number': phone_number,
-                'product_name': product_name,
-                'order_by': 'a.created_at ASC' if order_by is None else order_by,
-                'order_status_id': order_status_id,
-                'seller_id': g.seller_id
+                'limit':            50 if limit is None else int(limit),
+                'offset':           0 if offset is None else int(offset),
+                'start_date':       start_date,
+                'end_date':         end_date,
+                'order_number':     order_number,
+                'detail_number':    detail_number,
+                'user_name':        user_name,
+                'phone_number':     phone_number,
+                'product_name':     product_name,
+                'order_by':         1 if order_by is None else order_by,
+                'order_status_id':  order_status_id,
+                'seller_id':        g.seller_id
             }
 
             order_list = order_service.get_order_product_list(query_string_list, session)
@@ -119,16 +122,20 @@ def order_endpoints(app, services, get_session):
             if session:
                 session.close()
 
-    @app.route("/order/shipment/<int:shipment_button>", methods=['POST'])
+    @app.route("/order/shipment", methods=['POST'])
     @login_required
-    def change_shipment_status(shipment_button):
+    def change_shipment_status():
         # 배송처리, 배송완료처리 버튼 눌렀을 때 배송 상태 변경하기
         session = None
         try:
             session = get_session()
-            order_id_list = request.json
+            order_list = request.json
+            button = order_list['shipment_button']
 
-            order_service.change_order_status(order_id_list, shipment_button, session)
+            if button != shipment_button['SHIPMENT'] or button != shipment_button['SHIPMENT_COMPLETE']:
+                return jsonify({'message': 'invalid button error'}), 400
+
+            order_service.change_order_status(order_list, button, session)
 
             session.commit()
             return jsonify({'message': 'success'}), 200
@@ -145,10 +152,12 @@ def order_endpoints(app, services, get_session):
             if session:
                 session.close()
 
-    @app.route("/order/detail/<int:order_id>", methods=['GET'])
+    @app.route("/order/<int:order_id>", methods=['GET'])
     @login_required
     def get_order_detail(order_id):
-        # 주문 상세 페이지 정보 가져오기
+        """
+        주문 상세페이지 - 주문정보 가져오기
+        """
         session = None
         try:
             session = get_session()
@@ -169,21 +178,21 @@ def order_endpoints(app, services, get_session):
             if session:
                 session.close()
 
-    @app.route("/order/change_number", methods=['POST'])
+    @app.route("/order/change_number", methods=['PUT'])
     @login_required
     @validate_params(
         Param('phone_number', JSON, str, rules=[Pattern(r'^010-[0-9]{3,4}-[0-9]{4}$')]),
         Param('order_id', JSON, int)
     )
     def change_phone_number(phone_number, order_id):
-        # 주문자 핸드폰 번호 수정하기
+        """
+        주문 상세 페이지
+        주문자 핸드폰 번호 수정하기
+        {"order_id": 3, "phone_number":"010-456-7899"}
+        """
         session = None
         try:
             session = get_session()
-
-            """
-            {"order_id": 3, "phone_number":"010-456-7899"}
-            """
 
             data = {'phone_number': phone_number, 'order_id': order_id}
 

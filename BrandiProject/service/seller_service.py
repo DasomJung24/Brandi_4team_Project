@@ -58,7 +58,7 @@ class SellerService:
         # 셀러상세페이지에 등록된 셀러 데이터 불러오기
         seller = self.seller_dao.get_seller_information(seller_id, session)
         manager = self.seller_dao.get_manager_information(seller_id, session)
-        seller_status = self.seller_dao.get_seller_status_histories(seller_id, session)
+        seller_status_histories = self.seller_dao.get_seller_status_histories(seller_id, session)
 
         seller_data = dict()
         seller_data['id'] = seller['id']
@@ -81,11 +81,12 @@ class SellerService:
         seller_data['brand_crm_number'] = seller['brand_crm_number']
         seller_data['manager_information'] = [dict(row) for row in manager]
         status_histories = []
+
         # 셀러 상태 변경 히스토리는 1개 이상이기 때문에 배열로 받아옴
-        for history in seller_status:
-            status = dict()
-            status['seller_status_id'] = history['seller_status_id']
-            status['update_time'] = history['update_time'].strftime('%Y-%m-%d %H:%M:%S')
+        for history in seller_status_histories:
+            seller_status = dict()
+            seller_status['seller_status_id'] = history['seller_status_id']
+            seller_status['update_time'] = history['update_time'].strftime('%Y-%m-%d %H:%M:%S')
             status_histories.append(status)
 
         seller_data['status_histories'] = status_histories
@@ -225,7 +226,7 @@ class SellerService:
 
         seller = self.seller_dao.get_seller_information(seller_id, session)
         manager = self.seller_dao.get_manager_information(seller_id, session)
-        seller_status = self.seller_dao.get_seller_status_histories(seller_id, session)
+        seller_status_histories = self.seller_dao.get_seller_status_histories(seller_id, session)
 
         seller_data = dict()
         seller_data['id'] = seller['id']
@@ -249,12 +250,13 @@ class SellerService:
         seller_data['brand_crm_number'] = seller['brand_crm_number']
         seller_data['manager_information'] = [dict(row) for row in manager]
         status_histories = []
+
         # 셀러 상태 변경 히스토리는 1개 이상이기 때문에 배열로 받아옴
-        for history in seller_status:
-            status = dict()
-            status['account'] = seller['account']
-            status['seller_status_id'] = history['seller_status_id']
-            status['update_time'] = history['update_time'].strftime('%Y-%m-%d %H:%M:%S')
+        for history in seller_status_histories:
+            seller_status = dict()
+            seller_status['account'] = seller['account']
+            seller_status['seller_status_id'] = history['seller_status_id']
+            seller_status['update_time'] = history['update_time'].strftime('%Y-%m-%d %H:%M:%S')
             status_histories.append(status)
 
         seller_data['status_histories'] = status_histories
@@ -262,7 +264,7 @@ class SellerService:
         return seller_data
 
     def post_master_seller_page(self, seller_data, seller_id, session):
-        # 셀러상세페이지 셀러의 정보 데이터베이스에 넣기
+        # 셀러상세페이지에서 마스터가 셀러의 정보 데이터베이스에 넣기
         manager_information = seller_data['manager_information']
         seller_data['id'] = seller_id
 
@@ -272,5 +274,6 @@ class SellerService:
         for manager in manager_information:
             manager['ordering'] = ordering
             manager['seller_id'] = seller_id
-            self.seller_dao.update_manager_information(manager, session)
             ordering += 1
+
+        self.seller_dao.update_manager_information(manager_information, seller_id, session)

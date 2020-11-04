@@ -7,8 +7,7 @@ class ProductService:
 
     def get_category_color_size(self, session):
         """
-        :param session:
-        :return: {
+                {
                     "categories":[
                         {"id": 1, "name": "아우터"},
                         {"id": 2, "name": "상의"},
@@ -25,6 +24,7 @@ class ProductService:
                         ]
                 }
         """
+
         category_list = self.product_dao.select_category_list(session)
         color_list = self.product_dao.select_color_list(session)
         size_list = self.product_dao.select_size_list(session)
@@ -34,8 +34,11 @@ class ProductService:
                 'sizes': [dict(row) for row in size_list]}
 
     def post_register_product(self, product_data, session):
-        # 상품 등록하기
-        # 상품 선분이력 close_time 설정하기
+        """
+        상품 등록하기
+        config.py 에 상품의 선분이력 close_time 설정
+        """
+
         product_data['close_time'] = product_record['CLOSE_TIME']
         product_id = self.product_dao.insert_product_data(product_data, session)
 
@@ -64,31 +67,33 @@ class ProductService:
         sub_images = self.product_dao.select_product_images(product_id, session)
 
         # 새로운 상품 데이터 리스트 만들면서 할인가, 시간 형식 수정
-        product = dict()
-        product['is_sell'] = product_data['is_sell']
-        product['is_display'] = product_data['is_display']
-        product['sub_categories_id'] = product_data['sub_categories_id']
-        product['manufacturer'] = product_data['manufacturer']
-        product['manufacture_date'] = product_data['manufacture_date'].strftime('%Y-%m-%d %H:%M:%S') \
-            if product_data['manufacture_date'] is not None else None
-        product['origin'] = product_data['origin']
-        product['name'] = product_data['name']
-        product['simple_information'] = product_data['simple_information']
-        product['main_image'] = product_data['main_image']
-        product['detail'] = product_data['detail']
-        product['price'] = product_data['price']
-        product['discount_rate'] = product_data['discount_rate']
-        product['is_discount'] = product_data['is_discount']
-        product['discount_price'] = round(int(product_data['price']*(100-product_data['discount_rate'])/100), -1)
-        product['discount_start_date'] = product_data['discount_start_date'].strftime('%Y-%m-%d %H:%M:%S') \
-            if product_data['discount_start_date'] is not None else None
-        product['discount_end_date'] = product_data['discount_end_date'].strftime('%Y-%m-%d %H:%M:%S') \
-            if product_data['discount_end_date'] is not None else None
-        product['minimum_sell_count'] = product_data['minimum_sell_count']
-        product['maximum_sell_count'] = product_data['maximum_sell_count']
-        product['code_number'] = product_data['code_number']
-        product['options'] = [dict(row) for row in option_list]
-        product['image_list'] = [dict(row) for row in sub_images]
+        product = {
+            'is_sell':              product_data['is_sell'],
+            'is_display':           product_data['is_display'],
+            'sub_categories_id':    product_data['sub_categories_id'],
+            'manufacturer':         product_data['manufacturer'],
+            'manufacture_date':     product_data['manufacture_date'].strftime('%Y-%m-%d %H:%M:%S')
+                                    if product_data['manufacture_date'] is not None else None,
+            'origin':               product_data['origin'],
+            'name':                 product_data['name'],
+            'simple_information':   product_data['simple_information'],
+            'main_image':           product_data['main_image'],
+            'detail':               product_data['detail'],
+            'price':                product_data['price'],
+            'discount_rate':        product_data['discount_rate'],
+            'is_discount':          product_data['is_discount'],
+            'discount_price':       round(int(product_data['price']*(100-product_data['discount_rate'])/100), -1)
+                                    if product_data['discount_rate'] != 0 else 0,
+            'discount_start_date':  product_data['discount_start_date'].strftime('%Y-%m-%d %H:%M:%S')
+                                    if product_data['discount_start_date'] is not None else None,
+            'discount_end_date':    product_data['discount_end_date'].strftime('%Y-%m-%d %H:%M:%S')
+                                    if product_data['discount_end_date'] is not None else None,
+            'minimum_sell_count':   product_data['minimum_sell_count'],
+            'maximum_sell_count':   product_data['maximum_sell_count'],
+            'code_number':          product_data['code_number'],
+            'options':              [dict(row) for row in option_list],
+            'image_list':           [dict(row) for row in sub_images]
+        }
 
         return product
 
@@ -119,21 +124,22 @@ class ProductService:
 
         # 등록시간과 할인가격을 수정/추가하면서 새로운 리스트를 만듬
         for product in products_list:
-            product_data = dict()
-            product_data['name'] = product['name']
-            product_data['product_id'] = product['id']
-            product_data['main_image'] = product['main_image']
-            product_data['created_at'] = product['created_at'].strftime('%Y-%m-%d %H:%M:%S')
-            product_data['code_number'] = product['code_number']
-            product_data['price'] = product['price']
-            product_data['discount_rate'] = product['discount_rate']
-            product_data['discount_price'] = round(int(product['price']*(100-product['discount_rate'])/100), -1)
-            product_data['is_sell'] = product['is_sell']
-            product_data['is_display'] = product['is_display']
-            product_data['is_discount'] = product['is_discount']
-            product_data['product_number'] = product['id']
-            product_data['seller_property_id'] = product['seller_property_id']
-            product_data['brand_name_korean'] = product['brand_name_korean']
+            product_data = {
+                'name':                 product['name'],
+                'product_id':           product['id'],
+                'main_image':           product['main_image'],
+                'created_at':           product['created_at'].strftime('%Y-%m-%d %H:%M:%S'),
+                'code_number':          product['code_number'],
+                'price':                product['price'],
+                'discount_rate':        product['discount_rate'],
+                'discount_price':       round(int(product['price']*(100-product['discount_rate'])/100), -1),
+                'is_sell':              product['is_sell'],
+                'is_display':           product['is_display'],
+                'is_discount':          product['is_discount'],
+                'product_number':       product['id'],
+                'seller_property_id':   product['seller_property_id'],
+                'brand_name_korean':    product['brand_name_korean']}
+
             product_list.append(product_data)
 
         return {'product_list': product_list, 'total_count': products_data['total_count']}

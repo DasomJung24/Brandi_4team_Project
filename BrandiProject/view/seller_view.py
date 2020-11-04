@@ -49,13 +49,13 @@ def seller_endpoints(app, services, get_session):
             session = get_session()
 
             new_seller = {
-                'brand_crm_number': args[0],
-                'password': args[1],
-                'phone_number': args[2],
-                'account': args[3],
-                'brand_name_korean': args[4],
-                'brand_name_english': args[5],
-                'seller_property_id': args[6]
+                'brand_crm_number':     args[0],
+                'password':             args[1],
+                'phone_number':         args[2],
+                'account':              args[3],
+                'brand_name_korean':    args[4],
+                'brand_name_english':   args[5],
+                'seller_property_id':   args[6]
             }
 
             new_seller = seller_service.create_new_seller(new_seller, session)
@@ -122,7 +122,7 @@ def seller_endpoints(app, services, get_session):
             if session:
                 session.close()
 
-    @app.route("/mypage", methods=['GET', 'POST'])
+    @app.route("/mypage", methods=['GET', 'PUT'])
     @login_required
     def my_page():
         # 회원관리-셀러정보관리(셀러)
@@ -148,7 +148,7 @@ def seller_endpoints(app, services, get_session):
                     session.close()
 
         # 입력한 셀러 정보 받아서 데이터베이스에 넣기
-        if request.method == 'POST':
+        if request.method == 'PUT':
             session = None
             try:
                 session = get_session()
@@ -225,19 +225,19 @@ def seller_endpoints(app, services, get_session):
 
                 # 쿼리스트링을 딕셔너리로 만들어 줌
                 query_string_list = {
-                    'limit': 10 if limit is None else int(limit),
-                    'offset': 0 if offset is None else int(offset),
-                    'number': number,
-                    'account': account,
-                    'brand_name_korean': brand_name_korean,
-                    'brand_name_english': brand_name_english,
-                    'manager_name': manager_name,
-                    'manager_number': manager_number,
-                    'email': manager_email,
-                    'seller_status_id': seller_status_id,
-                    'seller_property_id': seller_property_id,
-                    'start_date': start_date,
-                    'end_date': end_date
+                    'limit':                10 if limit is None else int(limit),
+                    'offset':               0 if offset is None else int(offset),
+                    'number':               number,
+                    'account':              account,
+                    'brand_name_korean':    brand_name_korean,
+                    'brand_name_english':   brand_name_english,
+                    'manager_name':         manager_name,
+                    'manager_number':       manager_number,
+                    'email':                manager_email,
+                    'seller_status_id':     seller_status_id,
+                    'seller_property_id':   seller_property_id,
+                    'start_date':           start_date,
+                    'end_date':             end_date
                 }
 
                 seller_list = seller_service.get_seller_list(query_string_list, g.seller_id, session)

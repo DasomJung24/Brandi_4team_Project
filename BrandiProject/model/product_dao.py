@@ -364,7 +364,7 @@ class ProductDao:
 
     # 셀러가 자신의 등록 상품들을 가져오기
     def select_product_list(self, query_string_list, session):
-        sql = """
+        data = """
             SELECT
                 a.id,
                 a.created_at,
@@ -378,54 +378,87 @@ class ProductDao:
                 a.is_discount,
                 b.brand_name_korean,
                 b.seller_property_id
+        """
+
+        count = """
+            SELECT
+                count(*) as cnt
+        """
+
+        sql = """
             FROM products a
             JOIN sellers b
             ON a.seller_id = b.id
             WHERE
                 b.is_master = False """
 
+        # 판매 여부
         if query_string_list['is_sell']:
             sql += """
             AND
-                is_sell = :is_sell """
+                a.is_sell = :is_sell """
 
+        # 셀러 브랜드 명
+        if query_string_list['brand_name_korean']:
+            sql += """
+            AND
+                b.brand_name_korean = :brand_name_korean """
+
+        # 셀러 속성 id ( 로드샵, 내셔널 브랜드 ... )
+        if query_string_list['seller_property_id']:
+            sql += """
+            AND
+                b.seller_property_id = :seller_property_id"""
+
+        # 할인 여부
         if query_string_list['is_discount']:
             sql += """
             AND
-                is_discount = :is_discount """
+                a.is_discount = :is_discount """
 
+        # 진열 여부
         if query_string_list['is_display']:
             sql += """
             AND
-                is_display = :is_display """
+                a.is_display = :is_display """
 
+        # 상품명
         if query_string_list['name']:
             sql += """
             AND
-                name = :name """
+                a.name = :name """
 
+        # 상품 코드 번호
         if query_string_list['code_number']:
             sql += """
             AND 
-                code_number = :code_number """
+                a.code_number = :code_number """
 
+        # 시작 날짜
         if query_string_list['start_date']:
             sql += """
             AND
-                created_at > :start_date """
+                a.created_at > :start_date """
 
+        # 끝나는 날짜
         if query_string_list['end_date']:
             sql += """
             AND
-                created_at < :end_date """
+                a.created_at < :end_date """
 
-        total_count = len(session.execute(text(sql), query_string_list).fetchall())
+        # 상품 번호
+        if query_string_list['product_number']:
+            sql += """
+            AND
+                a.id = :product_number """
+
+        total_count = session.execute(text(count+sql), query_string_list).fetchone()
 
         sql += """
             LIMIT :limit
             OFFSET :offset
         """
 
-        product_list = session.execute(text(sql), query_string_list).fetchall()
+        product_list = session.execute(text(data+sql), query_string_list).fetchall()
 
-        return {'product_list': [dict(row) for row in product_list], 'total_count': total_count}
+        return {'product_list': [dict(row) for row in product_list], 'total_count': total_count['cnt']}

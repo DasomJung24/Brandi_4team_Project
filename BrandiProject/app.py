@@ -71,6 +71,6 @@ def create_app(test_config=None):
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(host='192.168.7.6', port='5000', debug=True)
+    app.run(host='192.168.219.184', port='5000', debug=True)
 
 

@@ -139,8 +139,8 @@ class SellerDao:
         
         return seller_status
 
-    # 셀러정보관리 페이지 업데이트
     def update_seller_information(self, seller, session):   # 셀러정보관리 페이지 update
+        # 셀러정보관리 페이지 업데이트
         update_row = session.execute(text("""
             UPDATE
                 sellers
@@ -170,36 +170,38 @@ class SellerDao:
         if update_row == 0:
             raise NoAffectedRowException(500, 'update_seller_information seller update error')
 
-    def update_manager_information(self, manager, session):
+    def update_manager_information(self, managers, seller_id, session):
+        # 담당자 정보 업데이트 하기
         delete_row = session.execute(text("""
             DELETE FROM
                 manager_informations
             WHERE
                 seller_id = :seller_id
-        """), {'seller_id': manager['seller_id']}).rowcount
+        """), {'seller_id': seller_id}).rowcount
 
         # delete 성공하면 해당하는 row 의 수 반환 실패하면 0 반환
         if delete_row == 0:
             raise NoAffectedRowException(500, 'update_seller_information manager information delete error')
 
-        manager_row = session.execute(text("""
-            INSERT INTO manager_informations(
-                name,
-                phone_number,
-                email,
-                seller_id,
-                ordering
-            ) VALUES (
-                :name,
-                :phone_number,
-                :email,
-                :seller_id,
-                :ordering
-            )
-        """), manager).rowcount
+        for manager in managers:
+            manager_row = session.execute(text("""
+                INSERT INTO manager_informations(
+                    name,
+                    phone_number,
+                    email,
+                    seller_id,
+                    ordering
+                ) VALUES (
+                    :name,
+                    :phone_number,
+                    :email,
+                    :seller_id,
+                    :ordering
+                )
+            """), manager).rowcount
 
-        if manager_row == 0:
-            raise NoAffectedRowException(500, 'update_seller_information manager information insert error')
+            if manager_row == 0:
+                raise NoAffectedRowException(500, 'update_seller_information manager information insert error')
 
     # 마스터인지 아닌지 확인하는 함수
     def is_master(self, seller_id, session):
@@ -217,7 +219,7 @@ class SellerDao:
 
     # 마스터 셀러계정관리에서 셀러 계정 가져오기
     def select_seller_list(self, query_string_list, session):
-        sql = """
+        data = """
             SELECT
                 a.id, 
                 a.account, 
@@ -228,9 +230,17 @@ class SellerDao:
                 a.created_at, 
                 b.name, 
                 b.phone_number, 
-                b.email              
+                b.email
+        """
+
+        count = """
+            SELECT
+                count(*) as cnt
+        """
+
+        sql = """
             FROM sellers a 
-            INNER JOIN manager_informations b 
+            LEFT JOIN manager_informations b 
             ON a.id = b.seller_id
             WHERE 
              b.ordering = 1
@@ -293,15 +303,15 @@ class SellerDao:
             AND
                 a.created_at < :end_date """
 
-        total_count = len(session.execute(text(sql), query_string_list).fetchall())
+        total_count = session.execute(text(count+sql), query_string_list).fetchone()
 
         sql += """
             LIMIT :limit
             OFFSET :offset """
 
-        seller_list = session.execute(text(sql), query_string_list).fetchall()
+        seller_list = session.execute(text(data+sql), query_string_list).fetchall()
 
-        return {'seller_list': [dict(row) for row in seller_list], 'total_count': total_count}
+        return {'seller_list': [dict(row) for row in seller_list], 'total_count': total_count['cnt']}
 
     # 셀러 상태 입점으로 변경
     def status_change_store(self, seller_id, session):
@@ -469,7 +479,7 @@ class SellerDao:
     def select_home_data(self, seller_id, session):
         total_products = session.execute(text("""
             SELECT
-                count(*)
+                count(*) as cnt
             FROM products
             WHERE
                 seller_id = :seller_id
@@ -477,7 +487,7 @@ class SellerDao:
 
         display_products = session.execute(text("""
             SELECT 
-                count(*) 
+                count(*) as cnt
             FROM products	
             WHERE 
                 is_display = 1
@@ -487,7 +497,7 @@ class SellerDao:
 
         prepare_shipment = session.execute(text("""
             SELECT
-                count(*)
+                count(*) as cnt
             FROM order_details
             WHERE
                 order_status_id = 1
@@ -497,7 +507,7 @@ class SellerDao:
 
         complete_shipment = session.execute(text("""
             SELECT
-                count(*)
+                count(*) as cnt
             FROM order_details
             WHERE
                 order_status_id = 3
@@ -505,10 +515,10 @@ class SellerDao:
                 seller_id = :seller_id
         """), {'seller_id': seller_id}).fetchone()
 
-        return {'total_count': total_products['count'],
-                'display_count': display_products['count'],
-                'prepare_count': prepare_shipment['count'],
-                'complete_count': complete_shipment['count']}
+        return {'total_count': total_products['cnt'],
+                'display_count': display_products['cnt'],
+                'prepare_count': prepare_shipment['cnt'],
+                'complete_count': complete_shipment['cnt']}
 
     def update_seller_information_master(self, seller, session):
         # 마스터가 셀러정보를 업데이트할 때
