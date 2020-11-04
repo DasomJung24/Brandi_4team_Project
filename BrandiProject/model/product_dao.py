@@ -13,6 +13,9 @@ class ProductDao:
             FROM categories
         """)).fetchall()
 
+        if category_list is None:
+            raise NoDataException(500, 'select_category_list select error')
+
         return category_list
 
     def select_color_list(self, session):
@@ -24,6 +27,9 @@ class ProductDao:
                     FROM colors
                 """)).fetchall()
 
+        if color_list is None:
+            raise NoDataException(500, 'select_color_list select error')
+
         return color_list
 
     def select_size_list(self, session):
@@ -34,6 +40,9 @@ class ProductDao:
                         name
                     FROM sizes
                 """)).fetchall()
+
+        if size_list is None:
+            raise NoDataException(500, 'select_size_list select error')
 
         return size_list
 
@@ -131,9 +140,14 @@ class ProductDao:
                    :close_time,
                    :main_image
                )
-           """), {'seller_id': product_data['seller_id'], 'product_id': product_id, 'name': product_data['name'],
-                  'price': product_data['price'], 'discount_rate': product_data['discount_rate'],
-                  'main_image': product_data['main_image'], 'close_time': product_data['close_time']}).rowcount
+           """), {
+                    'seller_id': product_data['seller_id'],
+                    'product_id': product_id,
+                    'name': product_data['name'],
+                    'price': product_data['price'],
+                    'discount_rate': product_data['discount_rate'],
+                    'main_image': product_data['main_image'],
+                    'close_time': product_data['close_time']}).rowcount
 
         if record == 0:
             raise NoAffectedRowException(500, 'insert_product_data record insert error')
@@ -329,6 +343,7 @@ class ProductDao:
                 raise NoAffectedRowException(500, 'update_option insert error')
 
     def update_sub_image(self, image_list, session):
+        # 상세페이지 서브 이미지 수정
         image_data = session.execute(text("""
             SELECT 
                 *
@@ -362,8 +377,8 @@ class ProductDao:
             if insert_image == 0:
                 raise NoAffectedRowException(500, 'update_sub_image insert error')
 
-    # 셀러가 자신의 등록 상품들을 가져오기
     def select_product_list(self, query_string_list, session):
+        # 셀러가 자신의 등록 상품들을 가져오기
         data = """
             SELECT
                 a.id,

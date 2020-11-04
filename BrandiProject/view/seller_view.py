@@ -1,7 +1,7 @@
 import jwt
 import re
 from flask import request, jsonify, g, current_app
-from flask_request_validator import Param, Pattern, validate_params, JSON, MinLength
+from flask_request_validator import Param, Pattern, validate_params, JSON, MinLength, Enum, GET, PATH
 from functools import wraps
 from exceptions import NoAffectedRowException, NoDataException
 
@@ -44,6 +44,26 @@ def seller_endpoints(app, services, get_session):
         Param('seller_property_id', JSON, str)
     )
     def sign_up(*args):
+        """ 회원가입 API
+
+        회원가입을 위한 정보를 Body 에 받음
+
+        Args:
+            *args:
+                brand_crm_number   : 브랜드 고객센터 번호
+                password           : 비밀번호
+                phone_number       : 담당자 핸드폰 번호
+                account            : 계정
+                brand_name_korean  : 브랜드명 ( 한글 )
+                brand_name_english : 브랜드명 ( 영어 )
+                seller_property_id : 셀러 속성 id ( 로드샵, 마켓 등 )
+
+        Returns:
+            200 : success , 회원가입 성공 시
+            400 : 같은 계정이 존재할 때, key error
+            500 : Exception
+
+        """
         session = None
         try:
             session = get_session()
@@ -83,11 +103,32 @@ def seller_endpoints(app, services, get_session):
                 session.close()
 
     @app.route("/login", methods=['POST'])
-    def log_in():
+    @validate_params(
+        Param('account', JSON, str),
+        Param('password', JSON, str)
+    )
+    def log_in(*args):
+        """
+
+        Args:
+            *args:
+                account  : 계정
+                password : 비밀번호
+
+        Returns:
+            200 : 로그인 성공 하면 access token 발행
+            400 : 계정이 존재하지 않을 때, 비밀번호가 틀렸을 때, soft delete 된 계정일 때,
+                셀러의 상태가 입점 대기 상태일 때
+            500 : Exception
+
+        """
         session = None
         try:
             session = get_session()
-            seller = request.json
+            seller = {
+                'account': args[0],
+                'password': args[1]
+            }
             token = seller_service.enter_login(seller, session)
 
             # 계정이 존재하지 않을 때
@@ -101,9 +142,6 @@ def seller_endpoints(app, services, get_session):
             # 소프트 딜리트 된 계정일 때
             if token == 'deleted account':
                 return jsonify({'message': 'account deleted'}), 400
-
-            if token == 'key error':
-                return jsonify({'message': 'key error'}), 400
 
             # 셀러 상태가 입점 대기 일 때 ( seller_status_id = 1 )
             if token == 'not authorized':
@@ -122,190 +160,298 @@ def seller_endpoints(app, services, get_session):
             if session:
                 session.close()
 
-    @app.route("/mypage", methods=['GET', 'PUT'])
+    @app.route("/mypage", methods=['GET'])
     @login_required
-    def my_page():
-        # 회원관리-셀러정보관리(셀러)
-        # 셀러가 셀러 정보 관리 들어갔을 때 등록된 정보 가져오기
-        if request.method == 'GET':
-            session = None
-            try:
-                session = get_session()
-                seller_data = seller_service.get_my_page(g.seller_id, session)
+    def get_my_page():
+        """ 셀러정보관리(셀러)
 
-                return jsonify(seller_data)
+        셀러가 셀러 정보 관리를 들어갔을 때 등록된 셀러의 데이터 가져오기
 
-            except NoDataException as e:
-                session.rollback()
-                return jsonify({'message': 'no data {}'.format(e)}), e.status_code
+        Returns:
+            200 : seller_data ( type : dict )
+            500 : Exception
 
-            except Exception as e:
-                session.rollback()
-                return jsonify({'message': '{}'.format(e)}), 500
+        """
+        session = None
+        try:
+            session = get_session()
+            seller_data = seller_service.get_my_page(g.seller_id, session)
 
-            finally:
-                if session:
-                    session.close()
+            return jsonify(seller_data)
 
+        except NoDataException as e:
+            session.rollback()
+            return jsonify({'message': 'no data {}'.format(e)}), e.status_code
+
+        except Exception as e:
+            session.rollback()
+            return jsonify({'message': '{}'.format(e)}), 500
+
+        finally:
+            if session:
+                session.close()
+
+    @app.route("/mypage", methods=['PUT'])
+    @login_required
+    @validate_params(
+        Param('image', JSON, str),
+        Param('simple_introduce', JSON, str),
+        Param('brand_crm_number', JSON, str, rules=[Pattern(r'^[0-9]{2,3}-[0-9]{3,4}-[0-9]{4}$')]),
+        Param('zip_code', JSON, int),
+        Param('address', JSON, str),
+        Param('detail_address', JSON, str),
+        Param('brand_crm_open', JSON, str),
+        Param('brand_crm_end', JSON, str),
+        Param('delivery_information', JSON, str),
+        Param('refund_exchange_information', JSON, str),
+        Param('seller_status_id', JSON, int),
+        Param('background_image', JSON, str, required=False),
+        Param('detail_introduce', JSON, str, required=False),
+        Param('is_brand_crm_holiday', JSON, int, rules=[Enum(0, 1)], required=False),
+        Param('brand_name_korean', JSON, str),
+        Param('brand_name_english', JSON, str),
+        Param('manager_information', JSON, list)
+    )
+    def put_my_page(*args):
+        """ 셀러 정보 관리 (셀러 )
+
+        셀러의 정보를 Body 로 받아서 데이터에 업데이트하기
+
+        Args:
+            *args:
+                image                       : 셀러 프로필 이미지
+                simple_introduce            : 셀러 한줄 소개
+                brand_crm_number            : 브랜드 고객센터 번호
+                zip_code                    : 우편번호
+                address                     : 주소
+                detail_address              : 상세 주소
+                brand_crm_open              : 고객센터 오픈시간
+                brand_crm_end               : 고객센터 마감시간
+                delivery_information        : 배송 정보
+                refund_exchange_information : 교환/환불 정보
+                seller_status_id            : 셀러 상태 id ( 입점, 입점대기 등 )
+                background_image            : 셀러페이지 배경이미지
+                detail_introduce            : 셀러 상세 소개
+                is_brand_crm_holiday        : 고객센터 주말 및 공휴일 운영 여부
+                brand_name_korean           : 브랜드명 ( 한글 )
+                brand_name_english          : 브랜드명 ( 영어 )
+                manager_information         : 담당자 정보 ( 이름, 핸드폰 번호, 이메일 )
+
+        Returns:
+            200 : success, 셀러 데이터 업데이트 성공 시
+            400 : 담당자 정보 안에 이름, 핸드폰 번호, 이메일 중 하나라도 없을 때,
+                담당자 이메일 형식 맞지 않을 때, 담당자 핸드폰 번호 형식 맞지 않을 때
+            500 : Exception
+
+        """
         # 입력한 셀러 정보 받아서 데이터베이스에 넣기
-        if request.method == 'PUT':
-            session = None
-            try:
-                session = get_session()
-                seller = request.json
+        session = None
+        try:
+            session = get_session()
+            seller = {
+                'image':                        args[0],
+                'simple_introduce':             args[1],
+                'brand_crm_number':             args[2],
+                'zip_code':                     args[3],
+                'address':                      args[4],
+                'detail_address':               args[5],
+                'brand_crm_open':               args[6],
+                'brand_crm_end':                args[7],
+                'delivery_information':         args[8],
+                'refund_exchange_information':  args[9],
+                'seller_status_id':             args[10],
+                'background_image':             args[11],
+                'detail_introduce':             args[12],
+                'is_brand_crm_holiday':         args[13],
+                'brand_name_korean':            args[14],
+                'brand_name_english':           args[15],
+                'manager_information':          args[16],
+                'id':                           g.seller_id
+            }
 
-                # 셀러 정보에 입력되는 필수값중에 None 이 있으면 에러 발생
-                if seller['image'] is None or seller['simple_introduce'] is None or seller['brand_crm_number'] is None \
-                        or seller['zip_code'] is None or seller['address'] is None or seller['detail_address'] is None \
-                        or seller['brand_crm_open'] is None or seller['brand_crm_end'] is None \
-                        or seller['delivery_information'] is None or seller['refund_exchange_information'] is None:
-                    return jsonify({'message': 'invalid request'}), 400
-
-                # 전화번호 형식이 맞지 않을 때 에러 발생
-                if re.match(r'^[0-9]{2,3}-[0-9]{3,4}-[0-9]{4}$', seller['brand_crm_number']) is None:
-                    return jsonify({'message': 'invalid crm number'}), 400
-
-                # 담당자 정보가 없으면 에러 발생
-                if seller['manager_information'] is None:
-                    return jsonify({'message': 'manager information not found'}), 400
-
+            for manager in seller['manager_information']:
                 # 담당자 정보 안에 이름, 번호, 이메일이 없으면 에러 발생
-                for manager in seller['manager_information']:
-                    if manager['name'] is None or manager['phone_number'] is None or manager['email'] is None:
-                        return jsonify({'message': 'no manager information data'}), 400
+                if manager['name'] is None or manager['phone_number'] is None or manager['email'] is None:
+                    return jsonify({'message': 'no manager information data'}), 400
 
-                    # 이메일 형식이 맞지 않을 때 에러 발생
-                    if re.match(r'^([0-9a-zA-Z_-]+)@([0-9a-zA-Z_-]+)\.([0-9a-zA-Z_-]+)$', manager['email']) is None:
-                        return jsonify({'message': 'invalid email'}), 400
+                # 이메일 형식이 맞지 않을 때 에러 발생
+                if re.match(r'^([0-9a-zA-Z_-]+)@([0-9a-zA-Z_-]+)\.([0-9a-zA-Z_-]+)$', manager['email']) is None:
+                    return jsonify({'message': 'invalid email'}), 400
 
-                    # 핸드폰 번호 형식이 맞지 않을 때 에러 발생
-                    if re.match(r'^010-[0-9]{3,4}-[0-9]{4}$', manager['phone_number']) is None:
-                        return jsonify({'message': 'invalid phone number'}), 400
+                # 핸드폰 번호 형식이 맞지 않을 때 에러 발생
+                if re.match(r'^010-[0-9]{3,4}-[0-9]{4}$', manager['phone_number']) is None:
+                    return jsonify({'message': 'invalid phone number'}), 400
 
-                seller_service.post_my_page(seller, session)
+            seller_service.post_my_page(seller, session)
 
-                session.commit()
-                return jsonify({'message': 'success'}), 200
+            session.commit()
+            return jsonify({'message': 'success'}), 200
 
-            except NoAffectedRowException as e:
-                session.rollback()
-                return jsonify({'message': 'no affected row error {}'.format(e.message)}), e.status_code
+        except NoAffectedRowException as e:
+            session.rollback()
+            return jsonify({'message': 'no affected row error {}'.format(e.message)}), e.status_code
 
-            except Exception as e:
-                session.rollback()
-                return jsonify({'message': '{}'.format(e)}), 500
+        except Exception as e:
+            session.rollback()
+            return jsonify({'message': '{}'.format(e)}), 500
 
-            finally:
-                if session:
-                    session.close()
+        finally:
+            if session:
+                session.close()
 
-    @app.route("/master/management-seller", methods=['GET', 'PUT'])
+    @app.route("/master/management-seller", methods=['GET'])
     @login_required
-    def management_seller():
-        # 셀러계정관리(마스터)
-        if request.method == 'GET':
-            # 셀러 계정들을 가져오기
-            session = None
-            try:
-                session = get_session()
-                # 쿼리스트링 받아오기
-                limit = request.args.get('limit', None)
-                offset = request.args.get('offset', None)
-                number = request.args.get('number', None)
-                account = request.args.get('account', None)
-                brand_name_korean = request.args.get('brand_name_korean', None)
-                brand_name_english = request.args.get('brand_name_english', None)
-                manager_name = request.args.get('manager_name', None)
-                manager_number = request.args.get('manager_number', None)
-                manager_email = request.args.get('manager_email', None)
-                seller_status_id = request.args.get('status_id', None)
-                seller_property_id = request.args.get('property_id', None)
-                start_date = request.args.get('start_date', None)
-                end_date = request.args.get('end_date', None)
+    @validate_params(
+        Param('limit', GET, int, required=False),
+        Param('offset', GET, int, required=False),
+        Param('number', GET, int, required=False),
+        Param('account', GET, str, required=False),
+        Param('brand_name_korean', GET, str, required=False),
+        Param('brand_name_english', GET, str, required=False),
+        Param('manager_name', GET, str, required=False),
+        Param('manager_number', GET, str, rules=[Pattern(r'^010-[0-9]{3,4}-[0-9]{4}$')], required=False),
+        Param('manager_email', GET, str, rules=[Pattern(r'^([0-9a-zA-Z_-]+)@([0-9a-zA-Z_-]+)\.([0-9a-zA-Z_-]+)$')],
+              required=False),
+        Param('status_id', GET, int, required=False),
+        Param('property_id', GET, int, required=False),
+        Param('start_date', GET, str, required=False),
+        Param('end_date', GET, str, required=False)
+    )
+    def get_management_seller(*args):
+        """ 셀러 계정 관리 ( 마스터 ) API
 
-                # 쿼리스트링을 딕셔너리로 만들어 줌
-                query_string_list = {
-                    'limit':                10 if limit is None else int(limit),
-                    'offset':               0 if offset is None else int(offset),
-                    'number':               number,
-                    'account':              account,
-                    'brand_name_korean':    brand_name_korean,
-                    'brand_name_english':   brand_name_english,
-                    'manager_name':         manager_name,
-                    'manager_number':       manager_number,
-                    'email':                manager_email,
-                    'seller_status_id':     seller_status_id,
-                    'seller_property_id':   seller_property_id,
-                    'start_date':           start_date,
-                    'end_date':             end_date
-                }
+        쿼리 파라미터로 필터링 될 값을 받아서 필터링 한 후 리스트를 보내줌
 
-                seller_list = seller_service.get_seller_list(query_string_list, g.seller_id, session)
+        Args:
+            *args:
+                limit              : pagination 범위
+                offset             : pagination 시작 번호
+                number             : 셀러의 id
+                account            : 셀러의 계정
+                brand_name_korean  : 브랜드명 ( 한글 )
+                brand_name_english : 브랜드명 ( 영어 )
+                manager_name       : 담당자명
+                manager_number     : 담당자 핸드폰 번호
+                manager_email      : 담당자 이메일
+                status_id          : 셀러의 상태 id ( 입점, 입점대기 등 )
+                property_id        : 셀러의 속성 id ( 로드샵, 마켓 등 )
+                start_date         : 해당 날짜 이후로 등록한 셀러 검색
+                end_date           : 해당 날짜 이전에 등록한 셀러 검색
 
-                # 마스터 계정이 아닐 때 에러 발생
-                if seller_list == 'not authorizated':
-                    return jsonify({'message': 'no master'}), 400
+        Returns:
+            200 : seller_list ( type : dict )
+            400 : 마스터 계정이 아닌 경우
+            500 : Exception
 
-                return jsonify(seller_list)
+        """
+        session = None
+        try:
+            session = get_session()
 
-            except NoDataException as e:
-                session.rollback()
-                return jsonify({'message': 'no data {}'.format(e)}), e.status_code
+            # 쿼리스트링을 딕셔너리로 만들어 줌
+            query_string_list = {
+                'limit':                10 if args[0] is None else args[0],
+                'offset':               0 if args[1] is None else args[1],
+                'number':               args[2],
+                'account':              args[3],
+                'brand_name_korean':    args[4],
+                'brand_name_english':   args[5],
+                'manager_name':         args[6],
+                'manager_number':       args[7],
+                'email':                args[8],
+                'seller_status_id':     args[9],
+                'seller_property_id':   args[10],
+                'start_date':           args[11],
+                'end_date':             args[12]
+            }
 
-            except Exception as e:
-                session.rollback()
-                return jsonify({'message': '{}'.format(e)}), 500
+            seller_list = seller_service.get_seller_list(query_string_list, g.seller_id, session)
 
-            finally:
-                if session:
-                    session.close()
+            # 마스터 계정이 아닐 때 에러 발생
+            if seller_list == 'not authorized':
+                return jsonify({'message': 'no master'}), 400
 
-        if request.method == 'PUT':
-            """
-            셀러 status 변경하기 ( 입점상태 )
-            {"seller_id":3,
-             "button":2}
-            """
+            return jsonify(seller_list)
 
-            session = None
-            try:
-                session = get_session()
-                seller_status = request.json
-                seller_id = seller_status['seller_id']
-                button = seller_status['button']
-                status = seller_service.post_seller_status(seller_id, button, session)
+        except NoDataException as e:
+            session.rollback()
+            return jsonify({'message': 'no data {}'.format(e)}), e.status_code
 
-                # 버튼과 버튼이 눌리는 셀러의 속성이 맞지 않을 때
-                if status == 'invalid request':
-                    return jsonify({'message': 'invalid request'}), 400
+        except Exception as e:
+            session.rollback()
+            return jsonify({'message': '{}'.format(e)}), 500
 
-                # 슬랙봇 메세지가 전송실패되었을 때
-                if status == 'message fail':
-                    return jsonify({'message': 'message failed'}), 400
+        finally:
+            if session:
+                session.close()
 
-                session.commit()
-                return jsonify({'message': 'success'}), 200
+    @app.route("/master/management-seller", methods=['PUT'])
+    @login_required
+    @validate_params(
+        Param('seller_id', JSON, int),
+        Param('button', JSON, int)
+    )
+    def put_management_seller(seller_id, button):
+        """ 마스터 셀러계정관리 API
 
-            except NoAffectedRowException as e:
-                session.rollback()
-                return jsonify({'message': 'no affected row error {}'.format(e.message)}), e.status_code
+        마스터가 버튼을 눌러 셀러의 상태를 변경함
+        셀러의 상태가 변경될 때마다 슬랙 채널로 "(seller_id)번 셀러의 상태가 (status)로 변경되었습니다" 라는 메세지 전송
 
-            except NoDataException as e:
-                session.rollback()
-                return jsonify({'message': 'no data {}'.format(e)}), e.status_code
+        Args:
+            seller_id: 셀러의 id
+            button: 셀러의 상태 변경 버튼 ( 입점으로 변경, 휴점으로 변경 등 )
 
-            except Exception as e:
-                session.rollback()
-                return jsonify({'message': '{}'.format(e)}), 500
+        Returns:
+            200 : success, 셀러의 상태가 정상적으로 변경되었을 때
+            400 : 눌린 버튼과 셀러의 상태가 맞지 않을 때, 슬랙봇 메세지가 전송 실패되었을 때
+            500 : Exception
 
-            finally:
-                if session:
-                    session.close()
+        """
+        session = None
+        try:
+            session = get_session()
+
+            status = seller_service.post_seller_status(seller_id, button, session)
+
+            # 버튼과 버튼이 눌리는 셀러의 속성이 맞지 않을 때
+            if status == 'invalid request':
+                return jsonify({'message': 'invalid request'}), 400
+
+            # 슬랙봇 메세지가 전송실패되었을 때
+            if status == 'message fail':
+                return jsonify({'message': 'message failed'}), 400
+
+            session.commit()
+            return jsonify({'message': 'success'}), 200
+
+        except NoAffectedRowException as e:
+            session.rollback()
+            return jsonify({'message': 'no affected row error {}'.format(e.message)}), e.status_code
+
+        except NoDataException as e:
+            session.rollback()
+            return jsonify({'message': 'no data {}'.format(e)}), e.status_code
+
+        except Exception as e:
+            session.rollback()
+            return jsonify({'message': '{}'.format(e)}), 500
+
+        finally:
+            if session:
+                session.close()
 
     @app.route("/home", methods=['GET'])
     @login_required
     def get_home_seller():
-        # 홈(셀러) 정보 가져오기
+        """ 홈 (셀러 ) API
+
+        셀러가 로그인했을 때 나오는 홈 화면의 데이터 보내주기
+
+        Returns:
+            200 : data ( type : dict )
+            500 : Exception
+
+        """
         session = None
         try:
             session = get_session()
@@ -322,81 +468,158 @@ def seller_endpoints(app, services, get_session):
             if session:
                 session.close()
 
-    @app.route("/master/management-seller/<int:seller_id>", methods=['GET', 'PUT'])
+    @app.route("/master/management-seller/<int:seller_id>", methods=['GET'])
     @login_required
-    def master_seller_page(seller_id):
-        if request.method == 'GET':
-            # 마스터가 셀러의 정보 가져올 때
-            session = None
-            try:
-                session = get_session()
-                seller_data = seller_service.get_seller_page(seller_id, session)
+    @validate_params(
+        Param('seller_id', PATH, int)
+    )
+    def get_master_seller_page(seller_id):
+        """ 셀러계정관리 ( 마스터 )
 
-                if seller_data == 'not authorizated':
-                    return jsonify({'message': 'not authorizated'})
+        마스터가 셀러의 데이터 가져오기
 
-                return jsonify(seller_data)
+        Args:
+            seller_id: 셀러 id
 
-            except NoDataException as e:
-                session.rollback()
-                return jsonify({'message': 'no data {}'.format(e)}), e.status_code
+        Returns:
+            200 : seller_data ( type : dict )
+            400 : 마스터 계정이 아닐 때
+            500 : Exception
 
-            except Exception as e:
-                session.rollback()
-                return jsonify({'message': '{}'.format(e)}), 500
+        """
+        session = None
+        try:
+            session = get_session()
+            seller_data = seller_service.get_seller_page(seller_id, session)
 
-            finally:
-                if session:
-                    session.close()
+            # 마스터 계정이 아닐 때 에러 발생
+            if seller_data == 'not authorized':
+                return jsonify({'message': 'not authorized'}), 400
 
-        if request.method == 'PUT':
-            # 마스터가 셀러의 정보 수정할 때
-            session = None
-            try:
-                session = get_session()
-                seller = request.json
+            return jsonify(seller_data)
 
-                # 셀러 정보에 입력되는 필수값중에 None 이 있으면 에러 발생
-                if seller['image'] is None or seller['simple_introduce'] is None or seller['brand_crm_number'] is None \
-                        or seller['zip_code'] is None or seller['address'] is None or seller['detail_address'] is None \
-                        or seller['brand_crm_open'] is None or seller['brand_crm_end'] is None \
-                        or seller['delivery_information'] is None or seller['refund_exchange_information'] is None:
-                    return jsonify({'message': 'invalid request'}), 400
+        except NoDataException as e:
+            session.rollback()
+            return jsonify({'message': 'no data {}'.format(e)}), e.status_code
 
-                # 전화번호 형식이 맞지 않을 때 에러 발생
-                if re.match(r'^[0-9]{2,3}-[0-9]{3,4}-[0-9]{4}$', seller['brand_crm_number']) is None:
-                    return jsonify({'message': 'invalid crm number'}), 400
+        except Exception as e:
+            session.rollback()
+            return jsonify({'message': '{}'.format(e)}), 500
 
-                # 담당자 정보가 없으면 에러 발생
-                if seller['manager_information'] is None:
-                    return jsonify({'message': 'manager information not found'}), 400
+        finally:
+            if session:
+                session.close()
 
-                # 담당자 정보 안에 이름, 번호, 이메일이 없으면 에러 발생
-                for manager in seller['manager_information']:
-                    if manager['name'] is None or manager['phone_number'] is None or manager['email'] is None:
-                        return jsonify({'message': 'no manager information data'}), 400
+    @app.route("/master/management-seller/<int:seller_id>", methods=['PUT'])
+    @login_required
+    @validate_params(
+        Param('seller_id', PATH, int),
+        Param('image', JSON, str),
+        Param('simple_introduce', JSON, str),
+        Param('brand_crm_number', JSON, str, rules=[Pattern(r'^[0-9]{2,3}-[0-9]{3,4}-[0-9]{4}$')]),
+        Param('zip_code', JSON, int),
+        Param('address', JSON, str),
+        Param('detail_address', JSON, str),
+        Param('brand_crm_open', JSON, str),
+        Param('brand_crm_end', JSON, str),
+        Param('delivery_information', JSON, str),
+        Param('refund_exchange_information', JSON, str),
+        Param('seller_status_id', JSON, int),
+        Param('background_image', JSON, str, required=False),
+        Param('detail_introduce', JSON, str, required=False),
+        Param('is_brand_crm_holiday', JSON, int, rules=[Enum(0, 1)]),
+        Param('brand_name_korean', JSON, str),
+        Param('brand_name_english', JSON, str),
+        Param('manager_information', JSON, list),
+        Param('seller_property_id', JSON, int)
+    )
+    def put_master_seller_page(*args):
+        """ 셀러 계정 관리 ( 마스터 )
 
-                    # 이메일 형식이 맞지 않을 때 에러 발생
-                    if re.match(r'^([0-9a-zA-Z_-]+)@([0-9a-zA-Z_-]+)\.([0-9a-zA-Z_-]+)$', manager['email']) is None:
-                        return jsonify({'message': 'invalid email'}), 400
+        Path parameter 로 셀러의 아이디를 받고 Body 로 셀러의 수정 데이터 받아서 수정하기
 
-                    # 핸드폰 번호 형식이 맞지 않을 때 에러 발생
-                    if re.match(r'^010-[0-9]{3,4}-[0-9]{4}$', manager['phone_number']) is None:
-                        return jsonify({'message': 'invalid phone number'}), 400
+        Args:
+            *args:
+                seller_id : 셀러 id
+                image : 셀러의 프로필 이미지
+                simple_introduce : 셀러 한줄 소개
+                brand_crm_number : 고객센터 전화번호
+                zip_code : 우편번호
+                address : 주소
+                detail_address : 상세주소
+                brand_crm_open : 고객센터 오픈시간
+                brand_crm_end : 고객센터 마감시간
+                delivery_information : 배송 정보
+                refund_exchange_information : 교환/환불 정보
+                seller_status_id : 셀러 상태 id ( 입점, 입점 대기 등 )
+                background_image : 셀러 배경 이미지
+                detail_introduce : 셀러 상세 정보
+                is_brand_crm_holiday : 고객센터 휴일/공휴일 영업 여부
+                brand_name_korean : 브랜드명 ( 한글 )
+                brand_name_english : 브랜드명 ( 영어 )
+                manager_information : 담당자 정보 ( 이름, 핸드폰 번호, 이메일 )
+                seller_property_id : 셀러 속성 id ( 마켓, 로드샵 등 )
 
-                seller_service.post_master_seller_page(seller,  seller_id, session)
+        Returns:
+            200 : success, 데이터 수정하기 성공했을 때
+            400 : 담당자 정보에 이름, 핸드폰 번호, 이메일 중 하나라도 없을 때 ,
+                  이메일 형식이 맞지 않을 때, 핸드폰번호 형식이 맞지 않을 때
+            500 : Exception
 
-                session.commit()
-                return jsonify({'message': 'success'}), 200
+        """
+        session = None
+        try:
+            session = get_session()
 
-            except NoAffectedRowException as e:
-                session.rollback()
-                return jsonify({'message': 'no affected row error {}'.format(e.message)}), e.status_code
+            # 셀러 데이터 받아서 딕셔너리로 만들기
+            seller = {
+                'id':                           args[0],
+                'image':                        args[1],
+                'simple_introduce':             args[2],
+                'brand_crm_number':             args[3],
+                'zip_code':                     args[4],
+                'address':                      args[5],
+                'detail_address':               args[6],
+                'brand_crm_open':               args[7],
+                'brand_crm_end':                args[88],
+                'delivery_information':         args[9],
+                'refund_exchange_information':  args[10],
+                'seller_status_id':             args[11],
+                'background_image':             args[12],
+                'detail_introduce':             args[13],
+                'is_brand_crm_holiday':         args[14],
+                'brand_name_korean':            args[15],
+                'brand_name_english':           args[16],
+                'manager_information':          args[17],
+                'seller_property_id':           args[18]
+            }
 
-            except Exception as e:
-                session.rollback()
-                return jsonify({'message': '{}'.format(e)}), 500
+            # 담당자 정보 안에 이름, 번호, 이메일이 없으면 에러 발생
+            for manager in seller['manager_information']:
+                if manager['name'] is None or manager['phone_number'] is None or manager['email'] is None:
+                    return jsonify({'message': 'no manager information data'}), 400
 
-            finally:
-                if session:
-                    session.close()
+                # 이메일 형식이 맞지 않을 때 에러 발생
+                if re.match(r'^([0-9a-zA-Z_-]+)@([0-9a-zA-Z_-]+)\.([0-9a-zA-Z_-]+)$', manager['email']) is None:
+                    return jsonify({'message': 'invalid email'}), 400
+
+                # 핸드폰 번호 형식이 맞지 않을 때 에러 발생
+                if re.match(r'^010-[0-9]{3,4}-[0-9]{4}$', manager['phone_number']) is None:
+                    return jsonify({'message': 'invalid phone number'}), 400
+
+            seller_service.put_master_seller_page(seller, session)
+
+            session.commit()
+            return jsonify({'message': 'success'}), 200
+
+        except NoAffectedRowException as e:
+            session.rollback()
+            return jsonify({'message': 'no affected row error {}'.format(e.message)}), e.status_code
+
+        except Exception as e:
+            session.rollback()
+            return jsonify({'message': '{}'.format(e)}), 500
+
+        finally:
+            if session:
+                session.close()

@@ -48,7 +48,8 @@ class OrderDao:
         # 상품 재고 수량 확인하기
         stock = session.execute(text("""
             SELECT
-                count
+                count,
+                is_inventory_manage
             FROM 
                 options
             WHERE
@@ -57,11 +58,16 @@ class OrderDao:
                 size_id = :size_id
             AND 
                 color_id = :color_id
-        """), {'product_id': product_id, 'size_id': size_id, 'color_id': color_id}).fetchone()
+        """), {'product_id': product_id,
+               'size_id': size_id,
+               'color_id': color_id}).fetchone()
+
+        if stock is None:
+            NoDataException(500, 'check_product_stock select error')
 
         return stock
 
-    def change_option_inventory(self, order_data, product_id, session):
+    def change_option_inventory(self, order_data, session):
         # 옵션의 재고 수량 수정하기
         option = session.execute(text("""
             SELECT
@@ -75,10 +81,7 @@ class OrderDao:
                 color_id = :color_id
             AND 
                 product_id = :product_id
-        """), {
-            'size_id': order_data['size_id'],
-            'color_id': order_data['color_id'],
-            'product_id': product_id}).fetchone()
+        """), order_data).fetchone()
 
         if option is None:
             raise NoDataException(500, 'change_option_inventory select error')
@@ -99,7 +102,7 @@ class OrderDao:
 
         return option['id']
 
-    def insert_order_data(self, order_data, product_id, option_id, seller_id, session):
+    def insert_order_data(self, order_data, option_id, seller_id, session):
         # 주문 정보 데이터에 저장하기
         order_id = session.execute(text("""
             INSERT INTO orders (
@@ -155,7 +158,7 @@ class OrderDao:
                 :total_price,
                 :seller_id
             )
-        """), {'order_id': order_id, 'product_id': product_id,
+        """), {'order_id': order_id, 'product_id': order_data['product_id'],
                'detail_number': datetime.today().strftime("%Y%m%d") + '%06d' % order_id,
                'count': order_data['count'], 'seller_id': seller_id,
                'option_id': option_id, 'total_price': order_data['total_price']}).rowcount
@@ -276,18 +279,22 @@ class OrderDao:
                        1           /           2        /        3          /         4
         """
         if query_string_list['order_by']:
+            # 결제일순 정렬
             if query_string_list['order_by'] == 1:
                 sql += """
                 ORDER BY a.created_at ASC """
 
+            # 결제일 역순 정렬
             if query_string_list['order_by'] == 2:
                 sql += """
                 ORDER BY a.created_at DESC """
 
+            # 업데이트순 정렬
             if query_string_list['order_by'] == 3:
                 sql += """
                 ORDER BY d.update_time ASC """
 
+            # 업데이트 역순 정렬
             if query_string_list['order_by'] == 4:
                 sql += """
                 ORDER BY d.update_time DESC """

@@ -5,6 +5,7 @@ from exceptions import NoAffectedRowException, NoDataException
 class SellerDao:
 
     def insert_seller(self, seller, session):
+        # 셀러 정보 등록하기
         seller_id = session.execute(text("""
             INSERT INTO sellers (
                 account,
@@ -61,6 +62,7 @@ class SellerDao:
         return seller_id
 
     def get_seller_data(self, account, session):
+        # 셀러 정보 가져오기
         seller = session.execute(text("""
             SELECT
                 id,
@@ -74,8 +76,8 @@ class SellerDao:
 
         return seller if seller else None
 
-    # 셀러 정보 관리 - 셀러 정보 가져오기
     def get_seller_information(self, seller_id, session):
+        # 셀러 정보 관리 - 셀러 정보 가져오기
         seller = session.execute(text("""
             SELECT
                 id,
@@ -160,7 +162,6 @@ class SellerDao:
                 seller_status_id            = :seller_status_id,
                 brand_name_korean           = :brand_name_korean,
                 brand_name_english          = :brand_name_english,
-                account                     = :account,
                 brand_crm_number            = :brand_crm_number
             WHERE
                 id = :id
@@ -184,6 +185,7 @@ class SellerDao:
             raise NoAffectedRowException(500, 'update_seller_information manager information delete error')
 
         for manager in managers:
+            # 담당자 데이터 넣기
             manager_row = session.execute(text("""
                 INSERT INTO manager_informations(
                     name,
@@ -203,8 +205,8 @@ class SellerDao:
             if manager_row == 0:
                 raise NoAffectedRowException(500, 'update_seller_information manager information insert error')
 
-    # 마스터인지 아닌지 확인하는 함수
     def is_master(self, seller_id, session):
+        # 마스터인지 아닌지 확인하는 함수
         is_master = session.execute(text("""
             SELECT
                 is_master
@@ -248,61 +250,73 @@ class SellerDao:
              a.is_master = 0
             """
 
+        # 브랜드명
         if query_string_list['brand_name_korean']:
             sql += """
             AND
                 a.brand_name_korean = :brand_name_korean """
 
+        # 셀러 번호
         if query_string_list['number']:
             sql += """
             AND
                 a.id = :number """
 
+        # 셀러 계정
         if query_string_list['account']:
             sql += """
             AND
                 a.account = :account """
 
+        # 브랜드 영어명
         if query_string_list['brand_name_english']:
             sql += """
             AND
                 a.brand_name_english = :brand_name_english """
 
+        # 담당자명
         if query_string_list['manager_name']:
             sql += """
             AND
                 b.name = :manager_name """
 
+        # 담당자 번호
         if query_string_list['manager_number']:
             sql += """
             AND
                 b.phone_number = :manager_number """
 
+        # 담당자 이메일
         if query_string_list['email']:
             sql += """
             AND
                 b.email = :email """
 
+        # 셀러 입점상태 id
         if query_string_list['seller_status_id']:
             sql += """
             AND
                 a.seller_status_id = :seller_status_id """
 
+        # 셀러 속성 id ( 로드샵, 마켓...)
         if query_string_list['seller_property_id']:
             sql += """
             AND
                 a.seller_property_id = :seller_property_id """
 
+        # 시작 날짜
         if query_string_list['start_date']:
             sql += """
             AND
                 a.created_at > :start_date """
 
+        # 끝나는 날짜
         if query_string_list['end_date']:
             sql += """
             AND
                 a.created_at < :end_date """
 
+        # 총 개수
         total_count = session.execute(text(count+sql), query_string_list).fetchone()
 
         sql += """
