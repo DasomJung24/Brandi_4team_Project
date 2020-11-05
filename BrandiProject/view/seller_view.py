@@ -181,7 +181,7 @@ def seller_endpoints(app, services, get_session):
 
         except NoDataException as e:
             session.rollback()
-            return jsonify({'message': 'no data {}'.format(e)}), e.status_code
+            return jsonify({'message': 'no data {}'.format(e.message)}), e.status_code
 
         except Exception as e:
             session.rollback()
@@ -375,7 +375,7 @@ def seller_endpoints(app, services, get_session):
 
         except NoDataException as e:
             session.rollback()
-            return jsonify({'message': 'no data {}'.format(e)}), e.status_code
+            return jsonify({'message': 'no data {}'.format(e.message)}), e.status_code
 
         except Exception as e:
             session.rollback()
@@ -430,7 +430,7 @@ def seller_endpoints(app, services, get_session):
 
         except NoDataException as e:
             session.rollback()
-            return jsonify({'message': 'no data {}'.format(e)}), e.status_code
+            return jsonify({'message': 'no data {}'.format(e.message)}), e.status_code
 
         except Exception as e:
             session.rollback()
@@ -500,7 +500,7 @@ def seller_endpoints(app, services, get_session):
 
         except NoDataException as e:
             session.rollback()
-            return jsonify({'message': 'no data {}'.format(e)}), e.status_code
+            return jsonify({'message': 'no data {}'.format(e.message)}), e.status_code
 
         except Exception as e:
             session.rollback()
@@ -581,7 +581,7 @@ def seller_endpoints(app, services, get_session):
                 'address':                      args[5],
                 'detail_address':               args[6],
                 'brand_crm_open':               args[7],
-                'brand_crm_end':                args[88],
+                'brand_crm_end':                args[8],
                 'delivery_information':         args[9],
                 'refund_exchange_information':  args[10],
                 'seller_status_id':             args[11],

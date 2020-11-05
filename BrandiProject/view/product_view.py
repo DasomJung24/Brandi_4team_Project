@@ -28,7 +28,7 @@ def product_endpoints(app, services, get_session):
 
         except NoDataException as e:
             session.rollback()
-            return jsonify({'message': 'no data error {}'.format(e)}), e.status_code
+            return jsonify({'message': 'no data error {}'.format(e.message)}), e.status_code
 
         except Exception as e:
             session.rollback()
@@ -204,7 +204,7 @@ def product_endpoints(app, services, get_session):
 
         except NoDataException as e:
             session.rollback()
-            return jsonify({'message': 'no data {}'.format(e)}), e.status_code
+            return jsonify({'message': 'no data {}'.format(e.message)}), e.status_code
 
         except Exception as e:
             session.rollback()

@@ -19,6 +19,9 @@ class OrderDao:
                 id = :id
         """), {'id': product_id}).fetchone()
 
+        if product_data is None:
+            raise NoDataException(500, 'select_product_data_for_order error')
+
         return product_data
 
     def select_product_option(self, product_id, session):
@@ -45,7 +48,7 @@ class OrderDao:
         return options
 
     def check_product_stock(self, product_id, color_id, size_id, session):
-        # 상품 재고 수량 확인하기
+        # 상품 재고 수량, 재고관리여부 확인하기
         stock = session.execute(text("""
             SELECT
                 count,
@@ -318,7 +321,7 @@ class OrderDao:
                 order_status_id = 2
             WHERE
                 order_id = :order_id
-        """), order_id).rowcount
+        """), {'order_id': order_id}).rowcount
 
         if status_row == 0:
             raise NoAffectedRowException(500, 'order_status_change_shipment update error')
@@ -334,7 +337,7 @@ class OrderDao:
                 2,
                 :order_id
             )
-        """), order_id).rowcount
+        """), {'order_id': order_id}).rowcount
 
         if history_row == 0:
             raise NoAffectedRowException(500, 'order_status_change_shipment insert error')
@@ -348,7 +351,7 @@ class OrderDao:
                 order_status_id = 3
             WHERE
                 order_id = :order_id
-        """), order_id).rowcount
+        """), {'order_id': order_id}).rowcount
 
         if status_row == 0:
             raise NoAffectedRowException(500, 'order_status_change_complete update error')
@@ -364,7 +367,7 @@ class OrderDao:
                 3,
                 :order_id
             )
-        """), order_id).rowcount
+        """), {'order_id': order_id}).rowcount
 
         if history_row == 0:
             raise NoAffectedRowException(500, 'order_status_change_complete insert error')
@@ -441,3 +444,17 @@ class OrderDao:
 
         if update_row == 0:
             raise NoAffectedRowException(500, 'update_phone_number update error')
+
+    def get_order_status_id(self, order_id, session):
+        # 주문 상태 id 가져오기
+        order_status = session.execute(text("""
+            SELECT 
+                order_status_id
+            FROM order_details
+            WHERE order_id = :order_id
+        """), {'order_id': order_id}).fetchone()
+
+        if order_status is None:
+            raise NoDataException(500, 'get_order_status_id error')
+
+        return order_status

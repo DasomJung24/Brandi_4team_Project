@@ -490,7 +490,8 @@ class SellerDao:
 
         return seller_status_id
 
-    def select_home_data(self, seller_id, session):
+    def select_home_data(self, seller_id, date, session):
+        # 주문 상품 총 개수
         total_products = session.execute(text("""
             SELECT
                 count(*) as cnt
@@ -499,6 +500,7 @@ class SellerDao:
                 seller_id = :seller_id
         """), {'seller_id': seller_id}).fetchone()
 
+        # 노출 상품 총 개수
         display_products = session.execute(text("""
             SELECT 
                 count(*) as cnt
@@ -509,6 +511,7 @@ class SellerDao:
                 seller_id = :seller_id
         """), {'seller_id': seller_id}).fetchone()
 
+        # 상품 준비 총 개수
         prepare_shipment = session.execute(text("""
             SELECT
                 count(*) as cnt
@@ -519,6 +522,7 @@ class SellerDao:
                 seller_id = :seller_id
         """), {'seller_id': seller_id}).fetchone()
 
+        # 배송 완료 총 개수
         complete_shipment = session.execute(text("""
             SELECT
                 count(*) as cnt
@@ -529,10 +533,39 @@ class SellerDao:
                 seller_id = :seller_id
         """), {'seller_id': seller_id}).fetchone()
 
+        # 최근 30 일간의 결제완료된 주문건수
+        total_order_count = session.execute(text("""
+            SELECT 
+                DATE_FORMAT (created_at, '%Y%m%d') AS date, 
+                count(*) AS cnt 
+            FROM orders 
+            WHERE created_at > :date
+            GROUP BY 
+                DATE_FORMAT(created_at, '%Y%m%d') 
+            ORDER BY date               
+        """), {'date': date}).fetchall()
+
+        # 최근 30일간의 총 금액
+        total_price = session.execute(text("""
+            SELECT 
+                DATE_FORMAT (b.created_at, '%Y%m%d') AS date, 
+                cast(sum(a.total_price) as signed) as price
+            FROM order_details a 
+            JOIN orders b 
+            ON b.id=a.order_id 
+            WHERE b.created_at > :date
+            GROUP BY 
+                date
+            ORDER BY date
+        """), {'date': date}).fetchall()
+
         return {'total_count': total_products['cnt'],
                 'display_count': display_products['cnt'],
                 'prepare_count': prepare_shipment['cnt'],
-                'complete_count': complete_shipment['cnt']}
+                'complete_count': complete_shipment['cnt'],
+                'count_for_a_month': [dict(row) for row in total_order_count],
+                'price_for_a_month': [dict(row) for row in total_price]
+                }
 
     def update_seller_information_master(self, seller, session):
         # 마스터가 셀러정보를 업데이트할 때

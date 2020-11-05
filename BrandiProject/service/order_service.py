@@ -2,8 +2,9 @@ from config import shipment_button, order_status
 
 
 class OrderService:
-    def __init__(self, order_dao):
+    def __init__(self, order_dao, seller_dao):
         self.order_dao = order_dao
+        self.seller_dao = seller_dao
 
     def get_product_data(self, product_id, session):
         """ 상품 구매할 때 구매하려는 상품의 정보 가져오기
@@ -16,7 +17,7 @@ class OrderService:
             product : 상품 데이터
 
         """
-        product_data = self.order_dao.select_product_data(product_id, session)
+        product_data = self.order_dao.select_product_data_for_order(product_id, session)
         product = dict()
         product['id'] = product_data['id']
 
@@ -54,7 +55,7 @@ class OrderService:
 
         # 재고관리여부를 확인하여 재고관리를 한다면
         # 재고수량과 비교하여 주문수량이 더 많은 경우 에러 발생 (마이너스 재고는 없다 가정)
-        if stock['is_inventory_manage'] is True:
+        if stock['is_inventory_manage'] == 1:
             if stock['count'] < order_data['count']:
                 return 'invalid count'
 
@@ -130,14 +131,26 @@ class OrderService:
         배송 처리 버튼 : 1 / 배송 완료 처리 버튼 : 2
         """
         if order_list['shipment_button'] == shipment_button['SHIPMENT']:
-            # 배송 처리 버튼을 누른 경우 셀러의 리스트를 반복문으로 돌려서 상태 바꿔줌
             for order_id in order_list['order_id_list']:
-                self.order_dao.order_status_change_shipment(order_id, session)
+                # 상품의 주문상태 id 가져오기
+                order_status_id = self.order_dao.get_order_status_id(order_id, session)
 
-        if order_list['shipment_button'] == shipment_button['SHIPMENT_COMPLETE']:
-            # 배송 완료 처리 버튼을 누른 경우 셀러의 리스트를 반복문으로 상태 바꿔줌
+                # 상품의 주문상태 id 가 상품 준비 상태가 맞으면 업데이트
+                if order_status_id['order_status_id'] == order_status['PREPARE_PRODUCT']:
+                    self.order_dao.order_status_change_shipment(order_id, session)
+                else:
+                    return f'order_id : {order_id} is not invalid'
+
+        elif order_list['shipment_button'] == shipment_button['SHIPMENT_COMPLETE']:
             for order_id in order_list['order_id_list']:
-                self.order_dao.order_status_change_complete(order_id, session)
+                # 상품의 주문상태 id 가져오기
+                order_status_id = self.order_dao.get_order_status_id(order_id, session)
+
+                # 상품의 주문상태 id 가 상품 배송중이 맞으면 업데이트
+                if order_status_id['order_status_id'] == order_status['SHIPPING']:
+                    self.order_dao.order_status_change_complete(order_id, session)
+                else:
+                    return f'order_id : {order_id} is not invalid'
 
     def get_details(self, order_id, session):
         """ 주문 상세페이지 데이터 가져오기
@@ -191,14 +204,22 @@ class OrderService:
 
         return order_data
 
-    def change_number(self, data, session):
+    def change_number(self, data, account_id, session):
         """ 주문 상세페이지 주문자 핸드폰 번호 수정하기
 
         Args:
-            data    : 변경하려는 핸드폰 번호, 주문 id
-            session : db 연결
+            data       : 변경하려는 핸드폰 번호, 주문 id
+            account_id : 계정의 id
+            session    : db 연결
 
         Returns:
 
         """
+        # 마스터 계정인지 확인하기
+        is_master = self.seller_dao.is_master(account_id, session)
+
+        # 마스터 계정이 아닐 때 에러 발생
+        if is_master['is_master'] == 0:
+            return 'not authorized'
+
         self.order_dao.update_phone_number(data, session)
