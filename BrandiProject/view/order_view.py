@@ -33,6 +33,10 @@ def order_endpoints(app, services, get_session):
 
             return jsonify(product_data), 200
 
+        except NoDataException as e:
+            session.rollback()
+            return jsonify({'message': 'no data error {}'.format(e.message)}), e.status_code
+
         except Exception as e:
             session.rollback()
             return jsonify({'message': '{}'.format(e)}), 500
@@ -222,19 +226,26 @@ def order_endpoints(app, services, get_session):
                 'shipment_button': args[1]
             }
 
-            # 버튼이 잘못 눌렸을 때 에러 발생
+            # 1,2번 외 다른 버튼이 잘못 눌렸을 때 에러 발생
             if order_list['shipment_button'] != shipment_button['SHIPMENT'] \
-                    or order_list['shipment_button'] != shipment_button['SHIPMENT_COMPLETE']:
+                    and order_list['shipment_button'] != shipment_button['SHIPMENT_COMPLETE']:
                 return jsonify({'message': 'invalid button error'}), 400
 
-            order_service.change_order_status(order_list,  session)
+            order_status = order_service.change_order_status(order_list,  session)
+
+            if order_status is not None:
+                return jsonify({'message': order_status}), 400
 
             session.commit()
             return jsonify({'message': 'success'}), 200
 
         except NoAffectedRowException as e:
             session.rollback()
-            return jsonify({'message': 'no affected row error {}'.format(e)}), e.status_code
+            return jsonify({'message': 'no affected row error {}'.format(e.message)}), e.status_code
+
+        except NoDataException as e:
+            session.rollback()
+            return jsonify({'message': 'no data error {}'.format(e.message)}), e.status_code
 
         except Exception as e:
             session.rollback()
@@ -272,7 +283,7 @@ def order_endpoints(app, services, get_session):
 
         except NoDataException as e:
             session.rollback()
-            return jsonify({'message': 'no data error {}'.format(e)}), e.status_code
+            return jsonify({'message': 'no data error {}'.format(e.message)}), e.status_code
 
         except Exception as e:
             session.rollback()
@@ -312,14 +323,17 @@ def order_endpoints(app, services, get_session):
                 'order_id': args[1]
             }
 
-            order_service.change_number(data, session)
+            result = order_service.change_number(data, g.seller_id, session)
+
+            if result == 'not authorized':
+                return jsonify({'message': result}), 400
 
             session.commit()
             return jsonify({'message': 'success'}), 200
 
         except NoAffectedRowException as e:
             session.rollback()
-            return jsonify({'message': 'no affected row error {}'.format(e)}), e.status_code
+            return jsonify({'message': 'no affected row error {}'.format(e.message)}), e.status_code
 
         except Exception as e:
             session.rollback()

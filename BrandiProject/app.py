@@ -27,7 +27,7 @@ def create_app(test_config=None):
     @app.errorhandler(Exception)
     def handle_invalid_usage(error):
         if isinstance(error, InvalidRequest):
-            return {'message': str(error)}
+            return {'message': str(error)}, 500
         else:
             response = jsonify(error)
             response.status_code = error.status_code
@@ -61,7 +61,7 @@ def create_app(test_config=None):
     services = Services
     services.seller_service = SellerService(seller_dao, app.config)
     services.product_service = ProductService(product_dao)
-    services.order_service = OrderService(order_dao)
+    services.order_service = OrderService(order_dao, seller_dao)
 
     seller_endpoints(app, services, get_session)
     product_endpoints(app, services, get_session)

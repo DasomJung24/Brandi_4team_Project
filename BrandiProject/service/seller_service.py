@@ -66,7 +66,7 @@ class SellerService:
             return 'wrong password'
 
         # 소프트 딜리트된 계정일 때 에러 발생
-        if seller_data['is_delete'] is True:
+        if seller_data['is_delete'] == 1:
             return 'deleted account'
 
         expire = datetime.utcnow() + timedelta(hours=24)
@@ -166,7 +166,7 @@ class SellerService:
         is_master = self.seller_dao.is_master(seller_id, session)
 
         # 마스터 계정이 아닐 때 에러 발생
-        if is_master['is_master'] is False:
+        if is_master['is_master'] == 0:
             return 'not authorized'
 
         seller_list = self.seller_dao.select_seller_list(query_string_list, session)
@@ -291,7 +291,11 @@ class SellerService:
             home_data : 홈(셀러) 데이터 정보
 
         """
-        home_data = self.seller_dao.select_home_data(seller_id, session)
+        # 한달 전 날짜 구하기
+        date = datetime.now()-timedelta(days=30)
+        date = date.strftime('%Y%m%d')
+
+        home_data = self.seller_dao.select_home_data(seller_id, date, session)
 
         return home_data
 
@@ -311,7 +315,7 @@ class SellerService:
         is_master = self.seller_dao.is_master(seller_id, session)
 
         # 마스터 계정이 아닐 때 에러 발생
-        if is_master['is_master'] is False:
+        if is_master['is_master'] == 0:
             return 'not authorized'
 
         seller = self.seller_dao.get_seller_information(seller_id, session)
