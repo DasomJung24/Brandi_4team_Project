@@ -139,7 +139,8 @@ def order_endpoints(app, services, get_session):
         Param('user_name', GET, str, required=False),
         Param('phone_number', GET, str, required=False),
         Param('product_name', GET, str, required=False),
-        Param('order_by', GET, int, required=False)
+        Param('order_by', GET, int, required=False),
+        Param('brand_name_korean', GET, str, required=False)
     )
     def order_prepare(*args):
         """ 주문리스트 API
@@ -159,6 +160,7 @@ def order_endpoints(app, services, get_session):
                 phone_number    : 주문자 핸드폰 번호
                 product_name    : 주문한 상품명
                 order_by        : 정렬 순서
+                brand_name_korean : 브랜드명(한글)
 
         Returns:
             200 : order_list ( type : dict )
@@ -171,17 +173,18 @@ def order_endpoints(app, services, get_session):
 
             # 쿼리스트링으로 리스트 만들기
             query_string_list = {
-                'order_status_id':  args[0],
-                'limit':            50 if args[1] is None else args[1],
-                'offset':           0 if args[2] is None else args[2],
-                'start_date':       args[3],
-                'end_date':         args[4],
-                'order_number':     args[5],
-                'detail_number':    args[6],
-                'user_name':        args[7],
-                'phone_number':     args[8],
-                'product_name':     args[9],
-                'order_by':         1 if args[10] is None else args[10]
+                'order_status_id':      args[0],
+                'limit':                50 if args[1] is None else args[1],
+                'offset':               0 if args[2] is None else args[2],
+                'start_date':           args[3],
+                'end_date':             args[4],
+                'order_number':         args[5],
+                'detail_number':        args[6],
+                'user_name':            args[7],
+                'phone_number':         args[8],
+                'product_name':         args[9],
+                'order_by':             2 if args[10] is None else args[10],
+                'brand_name_korean':    args[11]
             }
 
             order_list = order_service.get_order_product_list(query_string_list, session)

@@ -14,6 +14,7 @@ from exceptions import InvalidUsage
 class Services:
     pass
 
+
 def create_app(test_config=None):
 
     def get_session():
@@ -27,7 +28,7 @@ def create_app(test_config=None):
     @app.errorhandler(Exception)
     def handle_invalid_usage(error):
         if isinstance(error, InvalidRequest):
-            return {'message': str(error)}, 500
+            return {'message': str(error)}, 400
         else:
             response = jsonify(error)
             response.status_code = error.status_code
@@ -52,6 +53,7 @@ def create_app(test_config=None):
 
     database = create_engine(app.config['DB_URL'], encoding='utf-8', max_overflow=0)
     Session = sessionmaker(bind=database, autocommit=False)
+
     # Persistence Layer
     seller_dao = SellerDao()
     product_dao = ProductDao()
@@ -69,8 +71,9 @@ def create_app(test_config=None):
 
     return app
 
+
 if __name__ == "__main__":
     app = create_app()
-    app.run(host='192.168.219.184', port='5000', debug=True)
-
+    app.run(host='192.168.7.14', port='5000', debug=True)
+    # app.run(host='192.168.7.14', port='5000', debug=True)
 

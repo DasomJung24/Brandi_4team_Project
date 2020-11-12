@@ -443,9 +443,9 @@ def seller_endpoints(app, services, get_session):
     @app.route("/home", methods=['GET'])
     @login_required
     def get_home_seller():
-        """ 홈 (셀러 ) API
+        """ 홈 API
 
-        셀러가 로그인했을 때 나오는 홈 화면의 데이터 보내주기
+        로그인했을 때 나오는 홈 화면의 데이터 보내주기
 
         Returns:
             200 : data ( type : dict )
@@ -456,7 +456,7 @@ def seller_endpoints(app, services, get_session):
         try:
             session = get_session()
 
-            data = seller_service.get_home_data(g.seller_id, session)
+            data = seller_service.get_home_data(session)
 
             return jsonify(data), 200
 

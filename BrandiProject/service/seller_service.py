@@ -210,13 +210,13 @@ class SellerService:
 
             self.seller_dao.status_change_store(seller_id, session)
 
-            try:
-                client.chat_postMessage(
-                    channel=slack_channel['CHANNEL'],
-                    text=f'id {seller_id}번 셀러의 상태가 입점으로 변경되었습니다.'
-                )
-            except SlackApiError:
-                return 'message fail'
+            # try:
+            #     client.chat_postMessage(
+            #         channel=slack_channel['CHANNEL'],
+            #         text=f'id {seller_id}번 셀러의 상태가 입점으로 변경되었습니다.'
+            #     )
+            # except SlackApiError:
+            #     return 'message fail'
 
         # 퇴점대기 버튼이 눌린 셀러의 상태가  입점대기, 퇴점대기이면 에러 발생
         if button == action_button['CLOSED_WAIT_BUTTON']:
@@ -226,13 +226,13 @@ class SellerService:
 
             self.seller_dao.status_change_closed_wait(seller_id, session)
 
-            try:
-                client.chat_postMessage(
-                    channel=slack_channel['CHANNEL'],
-                    text=f'id {seller_id}번 셀러의 상태가 퇴점대기로 변경되었습니다.'
-                )
-            except SlackApiError:
-                return 'message fail'
+            # try:
+            #     client.chat_postMessage(
+            #         channel=slack_channel['CHANNEL'],
+            #         text=f'id {seller_id}번 셀러의 상태가 퇴점대기로 변경되었습니다.'
+            #     )
+            # except SlackApiError:
+            #     return 'message fail'
 
         # 휴점처리 버튼이 눌린 셀러의 상태가 입점대기, 휴점이면 에러 발생
         if button == action_button['TEMP_CLOSED_BUTTON']:
@@ -242,13 +242,13 @@ class SellerService:
 
             self.seller_dao.status_change_temporarily_closed(seller_id, session)
 
-            try:
-                client.chat_postMessage(
-                    channel=slack_channel['CHANNEL'],
-                    text=f'id {seller_id}번 셀러의 상태가 휴점으로 변경되었습니다.'
-                )
-            except SlackApiError:
-                return 'message fail'
+            # try:
+            #     client.chat_postMessage(
+            #         channel=slack_channel['CHANNEL'],
+            #         text=f'id {seller_id}번 셀러의 상태가 휴점으로 변경되었습니다.'
+            #     )
+            # except SlackApiError:
+            #     return 'message fail'
 
         # 입점거절 버튼이 눌린 셀러의 상태가 입점대기가 아니면 에러 발생
         if button == action_button['REFUSE_STORE_BUTTON']:
@@ -257,13 +257,13 @@ class SellerService:
 
             self.seller_dao.status_change_refused_store(seller_id, session)
 
-            try:
-                client.chat_postMessage(
-                    channel=slack_channel['CHANNEL'],
-                    text=f'id {seller_id}번 셀러의 상태가 입점거절로 변경되었습니다.'
-                )
-            except SlackApiError:
-                return 'message fail'
+            # try:
+            #     client.chat_postMessage(
+            #         channel=slack_channel['CHANNEL'],
+            #         text=f'id {seller_id}번 셀러의 상태가 입점거절로 변경되었습니다.'
+            #     )
+            # except SlackApiError:
+            #     return 'message fail'
 
         # 퇴점확정 버튼이 눌린 셀러의 상태가 퇴점대기가 아니라면 에러 발생
         if button == action_button['CONFIRM_CLOSED_BUTTON']:
@@ -272,30 +272,26 @@ class SellerService:
 
             self.seller_dao.status_change_closed_store(seller_id, session)
 
-            try:
-                client.chat_postMessage(
-                    channel=slack_channel['CHANNEL'],
-                    text=f'id {seller_id}번 셀러의 상태가 퇴점으로 변경되었습니다.'
-                )
-            except SlackApiError:
-                return 'message fail'
+            # try:
+            #     client.chat_postMessage(
+            #         channel=slack_channel['CHANNEL'],
+            #         text=f'id {seller_id}번 셀러의 상태가 퇴점으로 변경되었습니다.'
+            #     )
+            # except SlackApiError:
+            #     return 'message fail'
 
-    def get_home_data(self, seller_id, session):
-        """ 홈 (셀러) 데이터 가져오기
+    def get_home_data(self, session):
+        """ 홈 데이터 가져오기
 
         Args:
-            seller_id : 셀러 id
             session   : db 연결
 
         Returns:
-            home_data : 홈(셀러) 데이터 정보
+            home_data : 홈 데이터 정보
 
         """
-        # 한달 전 날짜 구하기
-        date = datetime.now()-timedelta(days=30)
-        date = date.strftime('%Y%m%d')
 
-        home_data = self.seller_dao.select_home_data(seller_id, date, session)
+        home_data = self.seller_dao.select_home_data(session)
 
         return home_data
 
