@@ -1,6 +1,6 @@
 from flask import jsonify, g
 from .seller_view import login_required
-from flask_request_validator import Param, PATH, validate_params, JSON, Enum, GET
+from flask_request_validator import Param, PATH, validate_params, JSON, Enum, GET, Pattern
 from exceptions import NoAffectedRowException, NoDataException
 
 
@@ -380,8 +380,8 @@ def product_endpoints(app, services, get_session):
                 'product_number':       args[7],
                 'start_date':           args[8],
                 'end_date':             args[9],
-                'brand_name_korean':    args[10],
-                'seller_property_id':   args[11],
+                'seller_property_id':   args[10],
+                'brand_name_korean':    args[11],
                 'seller_id':            g.seller_id
             }
 

@@ -37,7 +37,7 @@ class OrderDao:
             FROM options a 
             JOIN colors b 
             ON a.color_id = b.id 
-            JOIN sizes c ON c.id=a.size_id 
+            JOIN sizes c ON c.id = a.size_id 
             WHERE 
                 a.product_id = :product_id
         """), {'product_id': product_id}).fetchall()
@@ -275,6 +275,13 @@ class OrderDao:
             sql += """
             AND
                 c.name = :product_name """
+
+        # 브랜드명
+        if query_string_list['brand_name_korean']:
+            sql += """
+            AND
+                f.brand_name_korean = :brand_name_korean
+            """
 
         """
         정렬하기 ( 닐짜순, 날짜 역순 )

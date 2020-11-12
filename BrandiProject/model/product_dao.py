@@ -405,10 +405,11 @@ class ProductDao:
             JOIN sellers b
             ON a.seller_id = b.id
             WHERE
-                b.is_master = False """
+                1 = 1 """
 
         # 판매 여부
-        if query_string_list['is_sell']:
+        if query_string_list['is_sell'] == 0 or \
+                query_string_list['is_sell'] == 1:
             sql += """
             AND
                 a.is_sell = :is_sell """
@@ -423,16 +424,18 @@ class ProductDao:
         if query_string_list['seller_property_id']:
             sql += """
             AND
-                b.seller_property_id = :seller_property_id"""
+                b.seller_property_id = :seller_property_id """
 
         # 할인 여부
-        if query_string_list['is_discount']:
+        if query_string_list['is_discount'] == 0 or \
+                query_string_list['is_discount'] == 1:
             sql += """
             AND
                 a.is_discount = :is_discount """
 
         # 진열 여부
-        if query_string_list['is_display']:
+        if query_string_list['is_display'] == 0 or \
+                query_string_list['is_display'] == 1:
             sql += """
             AND
                 a.is_display = :is_display """
@@ -470,6 +473,7 @@ class ProductDao:
         total_count = session.execute(text(count+sql), query_string_list).fetchone()
 
         sql += """
+            ORDER BY created_at DESC
             LIMIT :limit
             OFFSET :offset
         """
